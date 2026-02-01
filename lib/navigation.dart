@@ -44,7 +44,7 @@ class _FirstPageState extends State<NavigationPage> {
       
       appBar: AppBar(
           title: Text("My App Bar"),
-          backgroundColor: Colors.greenAccent,
+          backgroundColor: Color(0xFFA6E3E9),
           elevation: 0,
           leading: Icon(Icons.menu),
           actions: [
@@ -55,7 +55,7 @@ class _FirstPageState extends State<NavigationPage> {
       body: _pages[_selectedIndex],
       bottomNavigationBar: BottomNavigationBar(
         unselectedItemColor: Color.fromARGB(255, 165, 165, 165),
-        selectedItemColor: Colors.greenAccent,
+        selectedItemColor: Color(0xFFA6E3E9),
         currentIndex: _selectedIndex,
         onTap: _navigateBottomBar, 
         items: [
