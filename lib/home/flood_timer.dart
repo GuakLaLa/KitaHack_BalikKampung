@@ -48,7 +48,7 @@ class FloodAlertDialog extends StatelessWidget {
             ),
             SizedBox(height: 20),
 
-            // Countdown circle
+            // Countdown circle with inner red ring
             Container(
               width: 180,
               height: 180,
@@ -58,23 +58,33 @@ class FloodAlertDialog extends StatelessWidget {
                 border: Border.all(color: Colors.red, width: 6),
               ),
               child: Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      '$daysUntilFlood',
-                      style: TextStyle(
-                        fontSize: 60,
-                        color: Colors.black,
-                        fontWeight: FontWeight.bold,
-                      ),
+                child: Container(
+                  width: 150,
+                  height: 150,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.white,
+                    border: Border.all(color: Colors.red, width: 4), // inner ring
+                  ),
+                  child: Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          '$daysUntilFlood',
+                          style: TextStyle(
+                            fontSize: 60,
+                            color: Colors.black,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        Text(
+                          'days',
+                          style: TextStyle(color: Colors.black54),
+                        ),
+                      ],
                     ),
-                    SizedBox(height: 6),
-                    Text(
-                      'days',
-                      style: TextStyle(color: Colors.black54),
-                    ),
-                  ],
+                  ),
                 ),
               ),
             ),
