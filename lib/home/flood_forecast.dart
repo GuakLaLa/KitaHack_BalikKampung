@@ -8,7 +8,14 @@ class FloodForecast {
     required this.day,
     required this.riskLevel,
   });
-}
+
+  factory FloodForecast.fromJson(Map<String, dynamic> json) {
+    return FloodForecast(
+      day: json['day'] as String,
+      riskLevel: json['riskLevel'] as String,
+    );
+  }
+} 
 
 class FloodForecastCard extends StatelessWidget {
   final FloodForecast forecast;

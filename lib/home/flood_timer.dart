@@ -69,6 +69,7 @@ class FloodAlertDialog extends StatelessWidget {
                   child: Center(
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
+                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Text(
                           '$daysUntilFlood',
@@ -80,7 +81,11 @@ class FloodAlertDialog extends StatelessWidget {
                         ),
                         Text(
                           'days',
-                          style: TextStyle(color: Colors.black54),
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: Colors.black54,
+                            fontWeight: FontWeight.w500,
+                          ),
                         ),
                       ],
                     ),
