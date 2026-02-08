@@ -2,9 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:floodsense/home/flood_prediction.dart';
 import 'package:floodsense/home/flood_forecast.dart';
 import 'package:floodsense/home/flood_timer.dart';
+import 'package:floodsense/services/flood_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-class HomePage extends StatefulWidget{
+class HomePage extends StatefulWidget {
   HomePage({super.key});
 
   @override
@@ -14,19 +15,45 @@ class HomePage extends StatefulWidget{
 class _HomePageState extends State<HomePage> {
   static const _prefsKey = 'flood_alert_last_shown';
 
+  String? _selectedDistrict;
+  FloodPredictionResponse? _floodData;
+  bool _isLoading = false;
+  String? _errorMessage;
+
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _maybeShowFloodAlert();
-    });
+    // Set default district to first one
+    _selectedDistrict = FloodService.supportedDistricts.first;
+    // Fetch initial data
+    _fetchFloodData(_selectedDistrict!);
   }
 
-  Future<void> _maybeShowFloodAlert() async {
-    // TODO: replace this placeholder with real AI prediction logic.
-    // For now, determine daysUntilFlood from your prediction logic.
-    // Example: AI predicts flood in 3 days.
-    final int? daysUntilFlood = 3; // null if no flood predicted
+  Future<void> _fetchFloodData(String district) async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final data = await FloodService.getFloodPrediction(district);
+      setState(() {
+        _floodData = data;
+        _isLoading = false;
+      });
+
+      // Check if we should show the alert dialog
+      _maybeShowFloodAlert(data);
+    } catch (e) {
+      setState(() {
+        _errorMessage = 'Error: ${e.toString()}';
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _maybeShowFloodAlert(FloodPredictionResponse data) async {
+    final int? daysUntilFlood = data.daysUntilFlood;
 
     if (daysUntilFlood == null) return;
     if (daysUntilFlood > 3) return; // only show if within 3 days
@@ -50,31 +77,114 @@ class _HomePageState extends State<HomePage> {
   }
 
   @override
-  Widget build(BuildContext context){
-    // Sample 3-day forecast data
-    List<FloodForecast> forecasts = [
-      FloodForecast(day: 'Today', riskLevel: 'LOW'),
-      FloodForecast(day: 'Tomorrow', riskLevel: 'MEDIUM'),
-      FloodForecast(day: 'Sun', riskLevel: 'HIGH'),
-      FloodForecast(day: 'Mon', riskLevel: 'LOW'),
-      FloodForecast(day: 'Tue', riskLevel: 'LOW'),
-    ];
+  Widget build(BuildContext context) {
+    // Forecasts are now provided by the API via _floodData
+    // The list below is intentionally empty; we'll display the API data when available.
 
     return Scaffold(
       body: SingleChildScrollView(
         child: Column(
           children: [
-            FloodPredictionCard(
-              location: 'Kota Damansara',
-              riskLevel: 'LOW',
-              waterDepth: '23mm',
-              weather: 'Slightly Cloud',
-              date: '23/1/2026',
-              floodReminder: 'Tomorrow will flood',
+            // District Dropdown Selector
+            Container(
+              margin: EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.1),
+                    blurRadius: 5,
+                    offset: Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: DropdownButton<String>(
+                value: _selectedDistrict,
+                isExpanded: true,
+                underline: SizedBox.shrink(),
+                hint: Text('Select a district'),
+                items: FloodService.supportedDistricts.map((district) {
+                  return DropdownMenuItem<String>(
+                    value: district,
+                    child: Text(FloodService.getDisplayName(district)),
+                  );
+                }).toList(),
+                onChanged: (String? newValue) {
+                  if (newValue != null) {
+                    setState(() {
+                      _selectedDistrict = newValue;
+                    });
+                    _fetchFloodData(newValue);
+                  }
+                },
+              ),
             ),
 
-            // 3-Day Flood Forecast
-            FloodForecastList(forecasts: forecasts),
+            // Error Message Display
+            if (_errorMessage != null) ...[
+              Container(
+                margin: EdgeInsets.symmetric(horizontal: 16),
+                padding: EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.red.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.red),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.error_outline, color: Colors.red),
+                    SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        _errorMessage!,
+                        style: TextStyle(color: Colors.red),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              SizedBox(height: 16),
+            ],
+
+            // Loading Indicator or Flood Prediction Card
+            if (_isLoading)
+              Padding(
+                padding: EdgeInsets.symmetric(vertical: 40),
+                child: Column(
+                  children: [
+                    CircularProgressIndicator(),
+                    SizedBox(height: 16),
+                    Text('Fetching flood prediction...'),
+                  ],
+                ),
+              )
+            else if (_floodData != null)
+              GestureDetector(
+                onTap: _floodData!.floodReminder != null
+                    ? () {
+                        showDialog(
+                          context: context,
+                          builder: (_) => FloodAlertDialog(
+                            daysUntilFlood: _floodData!.daysUntilFlood ?? 0,
+                          ),
+                        );
+                      }
+                    : null,
+                child: FloodPredictionCard(
+                  location: _floodData!.location,
+                  riskLevel: _floodData!.riskLevel,
+                  waterDepth: _floodData!.predictedArea,
+                  weather: _floodData!.currentWeather, // real-time weather from API
+                  date: DateTime.now().toString().split(' ')[0],
+                  floodReminder: _floodData!.floodReminder,
+                  daysUntilFlood: _floodData!.daysUntilFlood,
+                ),
+              ),
+
+            // 3-Day Flood Forecast (from API)
+            if (_floodData != null) FloodForecastList(forecasts: _floodData!.forecast),
           ],
         ),
       ),

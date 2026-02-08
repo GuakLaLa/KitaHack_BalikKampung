@@ -219,7 +219,7 @@ class FloodPredictionCard extends StatelessWidget {
                   showDialog(
                     context: context,
                     builder: (_) => FloodAlertDialog(
-                      daysUntilFlood: daysUntilFlood ?? 3,
+                      daysUntilFlood: daysUntilFlood ?? 0,
                     ),
                   );
                 },
