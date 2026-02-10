@@ -37,6 +37,11 @@ dependencies:
   geolocator: ^14.0.2
   shared_preferences: ^2.5.4
   http: ^1.1.0
+  firebase_core: ^4.4.0
+  firebase_auth: ^6.1.4
+  firebase_storage: ^13.0.6
+  google_sign_in: ^7.2.0
+  cloud_firestore: ^6.1.2
 
 dev_dependencies:
   flutter_test:
