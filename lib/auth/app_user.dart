@@ -1,3 +1,5 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 class AppUser {
   final String uid;
   final String email;
@@ -17,7 +19,7 @@ class AppUser {
       'email': email,
       'role': role,
       'phoneNumber': phoneNumber,
-      'createdAt': DateTime.now(),
+      'createdAt': FieldValue.serverTimestamp(),
     };
   }
 
