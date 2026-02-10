@@ -1,5 +1,9 @@
+import 'package:floodsense/auth/app_user.dart';
 import 'package:floodsense/components/my_textfield.dart';
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 import 'auth_service.dart';
 import 'login_page.dart';
 
@@ -77,10 +81,14 @@ class SignupPage extends StatelessWidget {
                   }
 
                   try {
+                    //create auth account
+                    AppUser? appUser =
                     await authService.signUp(
                       email: emailController.text.trim(),
                       password: passwordController.text,
                     );
+
+                    final uid = FirebaseAuth.instance.currentUser?.uid;
 
                     if (!context.mounted) return;
 

@@ -17,17 +17,21 @@ class AuthService {
     required String password, 
     String? phone}) 
     async {
+    //create auth account
     final credential = await _auth.createUserWithEmailAndPassword(
       email: email,
       password: password,
     );
     
-    final uid = credential.user?.uid;
+    final user = credential.user;
+    if(user == null) return null;
+
+    final uid = user.uid;
 
     final appUser = AppUser(
-      uid: uid!,
+      uid: uid,
       email: email,
-      role: "user",
+      role: "user", //default 
       phoneNumber: phone,
     );
 
@@ -40,14 +44,23 @@ class AuthService {
   }
 
   //Login with email & password
-  Future<AppUser?> loginWithEmailPassword(String email, String password) async {
+  Future<AppUser?> loginWithEmailPassword(
+    String email, 
+    String password
+    ) async {
     final credential = await _auth.signInWithEmailAndPassword(
       email: email,
       password: password,
     );
     
-    final uid = credential.user!.uid;
-    final doc = await _firestore.collection('users').doc(uid).get();
+    final user = credential.user;
+    if(user == null) return null;
+
+    final doc = await _firestore.collection('users').doc(user.uid).get();
+
+    if(!doc.exists){
+      throw Exception("User data not found in Firestore");
+    };
 
     return AppUser.fromJson(doc.data()!);
   }
@@ -64,6 +77,8 @@ class AuthService {
 
     final doc =
         await _firestore.collection('users').doc(user.uid).get();
+
+    if (!doc.exists) return null;
 
     return AppUser.fromJson(doc.data()!);
 }
