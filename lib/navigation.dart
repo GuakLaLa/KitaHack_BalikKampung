@@ -23,7 +23,7 @@ class _FirstPageState extends State<NavigationPage> {
   }
 
   //the pages we have in the app
-  final List _pages = [
+  final List<Widget> _pages = [
     //home page
     HomePage(),
 
