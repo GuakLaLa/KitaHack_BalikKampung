@@ -38,12 +38,20 @@ class _FirstPageState extends State<NavigationPage> {
 
   ];
 
+  final List<String> _titles = [
+    "Home",
+    "Map",
+    "Report",
+    "Profile",
+  ];
+
+
   @override
   Widget build(BuildContext context){
     return Scaffold(
       
       appBar: AppBar(
-          title: Text("My App Bar"),
+          title: Text(_titles[_selectedIndex]),
           backgroundColor: Color(0xFFA6E3E9),
           elevation: 0,
           leading: Icon(Icons.menu),
@@ -52,7 +60,9 @@ class _FirstPageState extends State<NavigationPage> {
 ),
           ],
         ),
+
       body: _pages[_selectedIndex],
+
       bottomNavigationBar: BottomNavigationBar(
         unselectedItemColor: Color.fromARGB(255, 165, 165, 165),
         selectedItemColor: Color(0xFFA6E3E9),
