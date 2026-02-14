@@ -4,6 +4,10 @@ import 'package:floodsense/home/flood_forecast.dart';
 import 'package:floodsense/home/flood_timer.dart';
 import 'package:floodsense/services/flood_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'rainfall_anomaly.dart';
+import 'weather_forecast.dart';
+import 'reminder_checklist.dart';
+import '../services/location_service.dart';
 
 class HomePage extends StatefulWidget {
   HomePage({super.key});
@@ -20,13 +24,42 @@ class _HomePageState extends State<HomePage> {
   bool _isLoading = false;
   String? _errorMessage;
 
+  // Location
+  double? latitude;
+  double? longitude;
+  bool isLocationLoading = true;
+
   @override
   void initState() {
     super.initState();
     // Set default district to first one
     _selectedDistrict = FloodService.supportedDistricts.first;
-    // Fetch initial data
-    _fetchFloodData(_selectedDistrict!);
+    _initAll();
+  }
+
+  Future<void> _initAll() async {
+    await _getUserLocation();
+    await _fetchFloodData(_selectedDistrict!);// Fetch initial data
+  }
+
+  // Get user's location lat long
+  Future<void> _getUserLocation() async {
+    try {
+      final position = await LocationService.getCurrentLocation();
+      
+      setState(() {
+        latitude = position.latitude;
+        longitude = position.longitude;
+        isLocationLoading = false;
+      });
+    } catch (e) {
+      print('Error getting location: $e');
+      setState(() {
+        latitude = LocationService.fallbackLatitude;
+        longitude = LocationService.fallbackLongitude;
+        isLocationLoading = false;
+      });
+    }
   }
 
   Future<void> _fetchFloodData(String district) async {
@@ -78,6 +111,12 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
+    if (isLocationLoading) {
+      return const Scaffold(
+        backgroundColor: Color(0xFFA6E3E9),
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
     // Forecasts are now provided by the API via _floodData
     // The list below is intentionally empty; we'll display the API data when available.
 
@@ -85,6 +124,32 @@ class _HomePageState extends State<HomePage> {
       body: SingleChildScrollView(
         child: Column(
           children: [
+             // GPS fallback warning
+              if (LocationService.isUsingFallback())
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  margin: const EdgeInsets.only(bottom: 16),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.shade100,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.location_off, color: Colors.orange.shade700, size: 18),
+                      const SizedBox(width: 8),
+                      Expanded(child: Text(LocationService.getLocationInfoText())),
+                      IconButton(
+                        icon: const Icon(Icons.refresh, size: 18),
+                        onPressed: () {
+                          LocationService.clearCache();
+                          setState(() => isLocationLoading = true);
+                          _getUserLocation();
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+
             // District Dropdown Selector
             Container(
               margin: EdgeInsets.symmetric(horizontal: 16, vertical: 20),
@@ -185,7 +250,24 @@ class _HomePageState extends State<HomePage> {
 
             // 3-Day Flood Forecast (from API)
             if (_floodData != null) FloodForecastList(forecasts: _floodData!.forecast),
+
+            // Rainfall Anomaly Detection
+              RainfallAnomalyCard(
+                latitude: latitude!,
+                longitude: longitude!,
+              ),
+
+              // 7-Day Weather Forecast
+              WeatherForecastCard(
+                latitude: latitude!,
+                longitude: longitude!,
+              ),
+
+              // Reminder Checklist
+              const ReminderChecklistCard(),
           ],
+
+          
         ),
       ),
       backgroundColor: Color(0xFFA6E3E9),

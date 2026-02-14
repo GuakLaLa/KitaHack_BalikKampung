@@ -8,12 +8,13 @@ import 'package:floodsense/report/report_page.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:floodsense/firebase_options.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 Future<void> main() async {
   //firebase setup
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-
+  await dotenv.load(fileName: ".env");
   runApp(const MyApp());
 }
 
