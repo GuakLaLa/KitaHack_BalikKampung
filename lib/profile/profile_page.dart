@@ -68,7 +68,7 @@ class _ProfilePageState extends State<ProfilePage> {
                   (route) => false,
                 );
               },
-              child: const Text("Login / Sign Up"),
+              child: const Text("Login"),
             ),
           ],
         ),
@@ -82,14 +82,14 @@ class _ProfilePageState extends State<ProfilePage> {
       stream: FirebaseAuth.instance.authStateChanges(),
       builder: (context, authSnapshot) {
 
-        // ⏳ Waiting for Firebase
+        //Waiting for Firebase
         if (authSnapshot.connectionState == ConnectionState.waiting) {
           return const Scaffold(
             body: Center(child: CircularProgressIndicator()),
           );
         }
 
-        // ❌ Not logged in
+        //Not logged in
         if (!authSnapshot.hasData) {
           _showLoginDialog(context);
 
@@ -126,7 +126,7 @@ class _ProfilePageState extends State<ProfilePage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
 
-                    // 👤 Profile Header
+                    //Profile Header
                     Row(
                       children: [
                         const CircleAvatar(
