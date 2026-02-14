@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 // Shelter types
 enum ShelterType { school, mosque, church, stadium, communityHall }
@@ -97,7 +98,8 @@ class NearbyShelter {
 // Service
 
 class PlacesShelterService {
-  static const String _apiKey = 'AIzaSyCOivYeHLQaTIVYwHzFWOj5iE89FQQmZJc';
+  static String get _apiKey =>
+      dotenv.env['googleApiKey'] ?? '';
 
   // (googlePlacesType, ShelterType)
   static const _searchTypes = [
