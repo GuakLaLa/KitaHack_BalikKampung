@@ -45,6 +45,8 @@ class FloodService {
   static const String _baseUrl =
       'https://predict-flood-453491805144.asia-southeast1.run.app';
 
+  static String get baseUrl => _baseUrl;
+
   static const List<String> supportedDistricts = [
     'Kota_Bharu_Kelantan',
     'Kota_Tinggi_Johor',

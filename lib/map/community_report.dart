@@ -16,32 +16,36 @@ class FloodDetailsPage extends StatelessWidget {
     required this.longitude,
   }) : super(key: key);
 
-  // Color adjustments from code 1 theme
+  // Updated water level color mapping
   Color _getWaterColor(String waterLevel) {
     switch (waterLevel.toLowerCase()) {
-      case 'waist':
-        return const Color(0xFFFF6B6B);
-      case 'knee':
-        return const Color(0xFFFFC857);
       case 'ankle':
-        return const Color(0xFF4D96FF);
+        return Colors.yellow; // Yellow for ankle
+      case 'knee':
+      case 'waist':
+        return Colors.orange; // Orange for knee or waist
+      case 'chest':
+      case 'head':
+      case 'above':
+        return Colors.red; // Red for chest, head, above
       default:
-        return const Color(0xFFCBD5E1);
+        return Colors.grey.shade400; // fallback color
     }
   }
 
+  // Updated road status color mapping
   Color _getRoadColor(String roadStatus) {
     if (roadStatus.toLowerCase() == 'passable') {
-      return const Color(0xFF4D96FF);
+      return Colors.green; // Green for passable
     } else {
-      return const Color(0xFFFF6B6B);
+      return Colors.red; // Red for blocked
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFA6E3E9), // Soft Teal
+      backgroundColor: const Color(0xFFA6E3E9),
       appBar: AppBar(
         elevation: 0,
         backgroundColor: const Color(0xFFE6F4F6),
@@ -69,7 +73,7 @@ class FloodDetailsPage extends StatelessWidget {
           if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
             return const Center(
               child: Text(
-                "No reports found at this location",
+                "No flood reports found at this location",
                 style: TextStyle(color: Color(0xFF6B7280)),
               ),
             );
@@ -216,12 +220,17 @@ class FloodDetailsPage extends StatelessWidget {
         text,
         style: TextStyle(
           fontWeight: FontWeight.w600,
-          fontSize: 12,
-          color: color,
+          fontSize: 14,
+          color: _getReadableColor(color),
         ),
       ),
     );
   }
+}
+
+Color _getReadableColor(Color color) {
+  if (color == Colors.yellow) return Colors.orange.shade600; // dark yellow
+  return color;
 }
 
 class FullscreenImagePage extends StatelessWidget {

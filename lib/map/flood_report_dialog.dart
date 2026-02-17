@@ -7,7 +7,11 @@ import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
 
 class FloodReportDialog {
-  static Future<void> show(
+  static void show(BuildContext context, Position currentPosition) {
+    _showFloodDetailsDialog(context, currentPosition);
+  }
+
+  static Future<void> _showFloodDetailsDialog(
       BuildContext context, Position currentPosition) async {
     TextEditingController detailsController = TextEditingController();
     TextEditingController locationController = TextEditingController();
@@ -17,7 +21,7 @@ class FloodReportDialog {
     List<XFile> selectedImages = [];
     final ImagePicker picker = ImagePicker();
 
-    /// Reverse geocode
+    // Reverse geocode to get the location name
     String locationName = "Fetching location...";
     try {
       List<Placemark> placemarks = await placemarkFromCoordinates(
@@ -87,8 +91,7 @@ class FloodReportDialog {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-
-                /// 📍 Location
+                // Location
                 _buildTextField(
                   controller: locationController,
                   label: "Location",
@@ -97,31 +100,29 @@ class FloodReportDialog {
 
                 const SizedBox(height: 16),
 
-                /// 💧 Water Level
+                // Water Level
                 _buildDropdown(
                   value: waterLevel,
                   label: "Water Level",
                   icon: Icons.water_drop_outlined,
-                  items: ['Ankle', 'Knee', 'Waist'],
-                  onChanged: (val) =>
-                      setStateDialog(() => waterLevel = val!),
+                  items: ['Ankle', 'Knee', 'Waist', 'Chest', 'Head/Above'],
+                  onChanged: (val) => setStateDialog(() => waterLevel = val!),
                 ),
 
                 const SizedBox(height: 16),
 
-                /// 🚧 Road Status
+                // Road Status
                 _buildDropdown(
                   value: roadStatus,
                   label: "Road Status",
                   icon: Icons.traffic_outlined,
                   items: ['Passable', 'Blocked'],
-                  onChanged: (val) =>
-                      setStateDialog(() => roadStatus = val!),
+                  onChanged: (val) => setStateDialog(() => roadStatus = val!),
                 ),
 
                 const SizedBox(height: 16),
 
-                /// 📝 Notes
+                // Notes
                 _buildTextField(
                   controller: detailsController,
                   label: "Additional Notes",
@@ -131,7 +132,7 @@ class FloodReportDialog {
 
                 const SizedBox(height: 18),
 
-                /// 🖼 Selected Images
+                // Selected Images
                 Wrap(
                   spacing: 8,
                   children: selectedImages.map((image) {
@@ -158,9 +159,7 @@ class FloodReportDialog {
                             child: const CircleAvatar(
                               radius: 12,
                               backgroundColor: Colors.red,
-                              child: Icon(Icons.close,
-                                  size: 14,
-                                  color: Colors.white),
+                              child: Icon(Icons.close, size: 14, color: Colors.white),
                             ),
                           ),
                         ),
@@ -171,7 +170,7 @@ class FloodReportDialog {
 
                 const SizedBox(height: 12),
 
-                /// Add Image Button (Soft Blue)
+                // Add Image Button
                 ElevatedButton.icon(
                   icon: const Icon(Icons.add_a_photo_outlined),
                   label: const Text("Add Image"),
@@ -195,29 +194,44 @@ class FloodReportDialog {
                             title: const Text("Camera"),
                             onTap: () async {
                               Navigator.pop(context);
-                              final XFile? image =
-                              await picker.pickImage(
-                                  source:
-                                  ImageSource.camera);
+                              final XFile? image = await picker.pickImage(
+                                  source: ImageSource.camera);
                               if (image != null) {
-                                setStateDialog(() =>
-                                    selectedImages.add(image));
+                                File file = File(image.path);
+                                int sizeInBytes = await file.length();
+                                double sizeInMb = sizeInBytes / (1024 * 1024);
+                                if (sizeInMb > 1) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                        content: Text(
+                                            "Image too large! Max allowed size is 1 MB.")),
+                                  );
+                                } else {
+                                  setStateDialog(() => selectedImages.add(image));
+                                }
                               }
                             },
                           ),
                           ListTile(
-                            leading: const Icon(
-                                Icons.photo_library_outlined),
+                            leading: const Icon(Icons.photo_library_outlined),
                             title: const Text("Gallery"),
                             onTap: () async {
                               Navigator.pop(context);
-                              final XFile? image =
-                              await picker.pickImage(
-                                  source:
-                                  ImageSource.gallery);
+                              final XFile? image = await picker.pickImage(
+                                  source: ImageSource.gallery);
                               if (image != null) {
-                                setStateDialog(() =>
-                                    selectedImages.add(image));
+                                File file = File(image.path);
+                                int sizeInBytes = await file.length();
+                                double sizeInMb = sizeInBytes / (1024 * 1024);
+                                if (sizeInMb > 1) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                        content: Text(
+                                            "Image too large! Max allowed size is 1 MB.")),
+                                  );
+                                } else {
+                                  setStateDialog(() => selectedImages.add(image));
+                                }
                               }
                             },
                           ),
@@ -239,7 +253,7 @@ class FloodReportDialog {
             ),
           ),
 
-          /// ACTIONS
+          // ACTIONS
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
@@ -260,19 +274,14 @@ class FloodReportDialog {
                 try {
                   await saveFloodReport();
                   Navigator.pop(context);
-                  ScaffoldMessenger.of(context)
-                      .showSnackBar(
+                  ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
-                      content:
-                      Text("Report submitted successfully"),
+                      content: Text("Report submitted successfully"),
                     ),
                   );
                 } catch (e) {
-                  ScaffoldMessenger.of(context)
-                      .showSnackBar(
-                    SnackBar(
-                        content:
-                        Text("Failed to save: $e")),
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text("Failed to save: $e")),
                   );
                 }
               },
@@ -284,7 +293,6 @@ class FloodReportDialog {
     );
   }
 
-  /// Reusable TextField
   static Widget _buildTextField({
     required TextEditingController controller,
     required String label,
@@ -307,7 +315,6 @@ class FloodReportDialog {
     );
   }
 
-  /// Reusable Dropdown
   static Widget _buildDropdown({
     required String value,
     required String label,
@@ -327,9 +334,7 @@ class FloodReportDialog {
           borderSide: BorderSide.none,
         ),
       ),
-      items: items
-          .map((e) => DropdownMenuItem(value: e, child: Text(e)))
-          .toList(),
+      items: items.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
       onChanged: onChanged,
     );
   }
