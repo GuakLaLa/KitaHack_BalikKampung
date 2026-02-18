@@ -1,6 +1,14 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+
+import 'flood_report_dialog.dart';
 import 'nearest_shelter.dart';
+import 'marker.dart';
+
+final FirebaseFirestore firestore = FirebaseFirestore.instance;
 
 class MapPage extends StatefulWidget {
   const MapPage({super.key});
@@ -10,88 +18,206 @@ class MapPage extends StatefulWidget {
 }
 
 class _MapPageState extends State<MapPage> {
-  double? _lat;
-  double? _lon;
+  GoogleMapController? _mapController;
+  StreamSubscription? _floodSubscription;
+
+  Position? _currentPosition;
   bool _loading = true;
+  String? _locationError;
+
+  final Set<Marker> _markers = {};
 
   @override
   void initState() {
     super.initState();
-    _getLocation();
+    _initialize();
   }
 
-  Future<void> _getLocation() async {
-    try {
-      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!serviceEnabled) throw Exception('Location services disabled');
-
-      LocationPermission perm = await Geolocator.checkPermission();
-      if (perm == LocationPermission.denied) {
-        perm = await Geolocator.requestPermission();
-      }
-      if (perm == LocationPermission.denied ||
-          perm == LocationPermission.deniedForever) {
-        throw Exception('Location permission denied');
-      }
-
-      final pos = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
-      );
-      if (mounted) setState(() { _lat = pos.latitude; _lon = pos.longitude; _loading = false; });
-    } catch (_) {
-      // Fallback: Bukit Mertajam
-      if (mounted) setState(() { _lat = 5.4141; _lon = 100.3288; _loading = false; });
-    }
+  Future<void> _initialize() async {
+    await _getLocation();
+    _listenFloodReports();
   }
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
-      body: SafeArea(
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 32),
-            child: SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                icon: _loading
-                    ? const SizedBox(
-                        width: 18, height: 18,
-                        child: CircularProgressIndicator(
-                          color: Colors.white, strokeWidth: 2))
-                    : const Icon(Icons.location_on),
-                label: Text(
-                  _loading ? 'Getting location...' : 'Shelters Around Me',
-                  style: const TextStyle(
-                      fontSize: 15, fontWeight: FontWeight.w600),
-                ),
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  backgroundColor: const Color(0xFF4285F4),
-                  foregroundColor: Colors.white,
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14)),
-                ),
-                onPressed: _loading
-                    ? null
-                    : () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => ShelterPage(
-                              latitude: _lat!,
-                              longitude: _lon!,
-                            ),
-                          ),
-                        );
-                      },
+  void dispose() {
+    _floodSubscription?.cancel();
+    _mapController?.dispose();
+    super.dispose();
+  }
+
+  // ---------------- Location ----------------
+  Future<void> _getLocation() async {
+    try {
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) throw Exception("Location services are disabled.");
+
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.denied) {
+        throw Exception("Location permission denied.");
+      }
+      if (permission == LocationPermission.deniedForever) {
+        throw Exception(
+            "Location permission permanently denied. Enable it in settings.");
+      }
+
+      _currentPosition = await Geolocator.getCurrentPosition();
+
+      Geolocator.getPositionStream(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          distanceFilter: 5,
+        ),
+      ).listen((Position position) {
+        _currentPosition = position;
+        if (mounted) {
+          setState(() {});
+          if (_mapController != null) {
+            _mapController!.animateCamera(
+              CameraUpdate.newLatLng(
+                LatLng(position.latitude, position.longitude),
               ),
+            );
+          }
+        }
+      });
+
+      if (mounted) setState(() => _loading = false);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _locationError = e.toString();
+      });
+    }
+  }
+
+  // ---------------- clustering ----------------
+  void _listenFloodReports() {
+    _floodSubscription =
+        firestore.collection('floodreports').snapshots().listen((
+            snapshot) async {
+          if (_currentPosition == null) return;
+
+          await buildClusteredMarkers(
+            snapshot.docs,
+            _currentPosition!,
+            context: context,
+            onUpdateMarkers: (newMarkers) {
+              if (!mounted) return;
+              setState(() {
+                _markers
+                  ..clear()
+                  ..addAll(newMarkers);
+              });
+            },
+            onClusterDeleted: (deletedCluster) {
+              if (!mounted) return;
+              setState(() {
+                _markers.removeWhere((m) =>
+                    deletedCluster.any((doc) =>
+                        m.markerId.value.contains(
+                            "${doc['latitude']}_${doc['longitude']}")));
+              });
+            },
+          );
+        });
+  }
+
+
+  // ---------------- UI ----------------
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (_locationError != null) {
+      return Scaffold(
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.location_off, size: 80, color: Colors.red),
+                const SizedBox(height: 20),
+                Text(_locationError!, textAlign: TextAlign.center),
+                const SizedBox(height: 20),
+                ElevatedButton(
+                  onPressed: () {
+                    setState(() => _loading = true);
+                    _getLocation();
+                  },
+                  child: const Text("Retry"),
+                ),
+              ],
             ),
           ),
         ),
+      );
+    }
+
+    final initialLatLng = _currentPosition != null
+        ? LatLng(_currentPosition!.latitude, _currentPosition!.longitude)
+        : const LatLng(0, 0);
+
+    return Scaffold(
+      body: GoogleMap(
+        initialCameraPosition: CameraPosition(
+          target: initialLatLng,
+          zoom: 12,
+        ),
+        markers: _markers,
+        myLocationEnabled: true,
+        myLocationButtonEnabled: true,
+        onMapCreated: (controller) => _mapController = controller,
       ),
+      floatingActionButton: Padding(
+        padding: const EdgeInsets.only(bottom: 16.0), // space from bottom
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            FloatingActionButton.extended(
+              heroTag: "shelter",
+              icon: const Icon(Icons.location_on),
+              label: const Text("Shelters Around Me"),
+              onPressed: () {
+                if (_currentPosition != null) {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) =>
+                          ShelterPage(
+                            latitude: _currentPosition!.latitude,
+                            longitude: _currentPosition!.longitude,
+                          ),
+                    ),
+                  );
+                }
+              },
+            ),
+            const SizedBox(width: 12),
+            FloatingActionButton.extended(
+              heroTag: "report",
+              backgroundColor: Colors.pink[200],
+              icon: const Icon(Icons.report),
+              label: const Text("Report Flood"),
+              onPressed: () {
+                if (_currentPosition != null) {
+                  FloodReportDialog.show(context, _currentPosition!);
+                }
+              },
+            ),
+          ],
+        ),
+      ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
     );
   }
+
 }
