@@ -3,23 +3,53 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 class AppUser {
   final String uid;
   final String email;
-  final String role; // "user" or "admin"
+  final String name;
+  final String role;
+
   final String? phoneNumber;
+  final String? photoUrl;
+
+  final DateTime createdAt;
+  final double? trustScore;
+  final bool? isVerified;
+
+  final double? lastLatitude;
+  final double? lastLongitude;
+
+  final String? emergencyName;
+  final String? emergencyContact;
 
   AppUser({
     required this.uid,
     required this.email,
+    required this.name,
     required this.role,
     this.phoneNumber,
+    this.photoUrl,
+    required this.createdAt,
+    this.trustScore,
+    this.isVerified,
+    this.lastLatitude,
+    this.lastLongitude,
+    this.emergencyName,
+    this.emergencyContact,
   });
 
   Map<String, dynamic> toJson() {
     return {
       'uid': uid,
       'email': email,
+      'name': name,
       'role': role,
       'phoneNumber': phoneNumber,
-      'createdAt': FieldValue.serverTimestamp(),
+      'photoUrl': photoUrl,
+      'createdAt': Timestamp.fromDate(createdAt),
+      'trustScore': trustScore,
+      'isVerified': isVerified,
+      'lastLatitude': lastLatitude,
+      'lastLongitude': lastLongitude,
+      'emergencyName': emergencyName,
+      'emergencyContact': emergencyContact,
     };
   }
 
@@ -27,8 +57,17 @@ class AppUser {
     return AppUser(
       uid: json['uid'],
       email: json['email'],
+      name: json['name'],
       role: json['role'],
-      phoneNumber: json['phoneNumber'], 
+      phoneNumber: json['phoneNumber'],
+      photoUrl: json['photoUrl'],
+      createdAt: (json['createdAt'] as Timestamp).toDate(),
+      trustScore: (json['trustScore'] as num?)?.toDouble(),
+      isVerified: json['isVerified'],
+      lastLatitude: (json['lastLatitude'] as num?)?.toDouble(),
+      lastLongitude: (json['lastLongitude'] as num?)?.toDouble(),
+      emergencyName: json['emergencyName'],
+      emergencyContact: json['emergencyContact'],
     );
   }
 }

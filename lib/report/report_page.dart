@@ -1,11 +1,25 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:floodsense/profile/emergency_contact_page.dart';
+import 'package:floodsense/report/advanced_flood_hotline_page.dart';
 import 'package:flutter/material.dart';
 import 'package:floodsense/report/emergencyForm_page.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:floodsense/auth/login_page.dart';
 
-class ReportPage extends StatelessWidget{
+class ReportPage extends StatefulWidget{
   const ReportPage({super.key});
 
+    @override
+  State<ReportPage> createState() => _ReportPageState();
+}
+
+class _ReportPageState extends State<ReportPage> {
+  bool _dialogShown = false;
+
   Future<void> _makePhoneCall(String phoneNumber) async {
+    if (phoneNumber.isEmpty) return;
+
     final Uri phoneUri = Uri.parse("tel:$phoneNumber");
 
     await launchUrl(
@@ -14,10 +28,121 @@ class ReportPage extends StatelessWidget{
     );
   }
 
+  //Show login popup
+  void _showLoginDialog(BuildContext context) {
+    if (_dialogShown) return;
+    _dialogShown = true;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => AlertDialog(
+          title: const Text("Login Required"),
+          content: const Text(
+            "You need to login to access the report page.",
+            style: TextStyle(color: Colors.black),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context);
+                _dialogShown = false;
+              },
+              child: const Text("Cancel"),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(context);
+                Navigator.pushAndRemoveUntil(
+                  context,
+                  MaterialPageRoute(builder: (_) => LoginPage()),
+                  (route) => false,
+                );
+              },
+              child: const Text("Login"),
+            ),
+          ],
+        ),
+      );
+    });
+  }
+
+  Future<String?> _getUserEmergencyContact() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return null;
+
+    final doc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid)
+        .get();
+
+    if (!doc.exists) return null;
+
+    return doc.data()?['emergencyContact'] as String?;
+  }
+
+  void _showMissingContactDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text("Emergency Contact Required"),
+        content: const Text(
+          "Please fill in your emergency contact first.",
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Cancel"),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const EmergencyContactPage(),
+                ),
+              ).then((_) {
+                setState(() {}); //Refresh UI after returning
+              });
+            },
+            child: const Text("Continue"),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
+    return StreamBuilder<User?>(
+      stream: FirebaseAuth.instance.authStateChanges(),
+      builder: (context, authSnapshot) {
+
+        // 🔄 Waiting
+        if (authSnapshot.connectionState == ConnectionState.waiting) {
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
+
+        // ❌ Not logged in
+        if (!authSnapshot.hasData) {
+          _showLoginDialog(context);
+
+          return const Scaffold(
+            body: Center(
+              child: Text("Redirecting to login..."),
+            ),
+          );
+        }
+
+        final user = authSnapshot.data!;
+    
+    return Scaffold(
+      body: Padding(
       padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -43,15 +168,45 @@ class ReportPage extends StatelessWidget{
           _buildCallButton(
             context,
             title: "Flood Response Team",
-            number: "0123456789",
-          ),
+            number: "",
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const AdvancedFloodHotlinePage(),
+                ),
+              );
+            },
+),
 
           const SizedBox(height: 20),
 
-          _buildCallButton(
-            context,
-            title: "Emergency contact\n(+60118938866)",
-            number: "+60118938866",
+          FutureBuilder<String?>(
+            future: _getUserEmergencyContact(),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              }
+
+              final number = snapshot.data;
+
+              return _buildCallButton(
+                context,
+                title: number != null
+                    ? "Emergency Contact\n($number)"
+                    : "Set Emergency Contact",
+
+                number: number ?? "",
+
+                onPressed: (){ 
+                  if (number == null || number.isEmpty) {
+                    _showMissingContactDialog(context);
+                  } else {
+                    _makePhoneCall(number);
+                  } 
+                },
+              );
+            },
           ),
 
           const SizedBox(height: 30),
@@ -93,12 +248,15 @@ class ReportPage extends StatelessWidget{
           ),
         ],
       ),
+    ),
+    );
+      },
     );
   }
 
   Widget _buildCallButton(
       BuildContext context,
-      {required String title, required String number}) {
+      {required String title, required String number, VoidCallback? onPressed}) {
     return ElevatedButton(
       style: ElevatedButton.styleFrom(
         backgroundColor: const Color(0xFF9ED0D6),
@@ -108,9 +266,8 @@ class ReportPage extends StatelessWidget{
         ),
         elevation: 5,
       ),
-      onPressed: () {
-        _makePhoneCall(number);
-      },
+      onPressed: onPressed ?? () => _makePhoneCall(number),
+
       child: Text(
         title,
         textAlign: TextAlign.center,
@@ -120,5 +277,6 @@ class ReportPage extends StatelessWidget{
         ),
       ),
     );
+    
   }
 }

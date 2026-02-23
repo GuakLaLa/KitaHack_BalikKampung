@@ -4,6 +4,10 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:floodsense/auth/login_page.dart';
 
+import 'emergency_contact_page.dart';
+import 'faq_page.dart';
+import 'aboutUs_page.dart';
+
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
 
@@ -50,7 +54,8 @@ class _ProfilePageState extends State<ProfilePage> {
         builder: (context) => AlertDialog(
           title: const Text("Login Required"),
           content: const Text(
-              "You need to login or create an account to access your profile."),
+              "You need to login or create an account to access your profile.",
+              style: TextStyle(color: Colors.black),),
           actions: [
             TextButton(
               onPressed: () {
@@ -162,13 +167,17 @@ class _ProfilePageState extends State<ProfilePage> {
                     ),
 
                     const SizedBox(height: 10),
-                    ListTile(
-                      title: const Text("Default location"),
-                      onTap: () {},
-                    ),
+
                     ListTile(
                       title: const Text("Emergency Contact"),
-                      onTap: () {},
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const EmergencyContactPage(),
+                          ),
+                        );
+                      },
                     ),
 
                     const SizedBox(height: 20),
@@ -209,11 +218,25 @@ class _ProfilePageState extends State<ProfilePage> {
 
                     ListTile(
                       title: const Text("FAQ"),
-                      onTap: () {},
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const FAQPage(),
+                          ),
+                        );
+                      },
                     ),
                     ListTile(
                       title: const Text("About Us"),
-                      onTap: () {},
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const AboutUsPage(),
+                          ),
+                        );
+                      },
                     ),
 
                     const SizedBox(height: 40),
@@ -239,7 +262,9 @@ class _ProfilePageState extends State<ProfilePage> {
                                 BorderRadius.circular(30),
                           ),
                         ),
-                        child: const Text("Edit Profile"),
+                        child: const Text("Edit Profile", 
+                        style: TextStyle(color: Colors.black),
+                        ),
                       ),
                     ),
 

@@ -1,3 +1,5 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:floodsense/admin/admin_navigation.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -15,19 +17,47 @@ class AppStartGate extends StatefulWidget {
 
 class _AppStartGateState extends State<AppStartGate> {
   bool? isFirstLaunch;
+  
+  Widget? nextPage;
 
   @override
   void initState() {
     super.initState();
-    _checkFirstLaunch();
+    _init();
   }
 
-  Future<void> _checkFirstLaunch() async {
+  Future<void> _init() async {
     final prefs = await SharedPreferences.getInstance();
     final seen = prefs.getBool('seenGetStarted') ?? false;
 
+        if (!seen) {
+      setState(() => isFirstLaunch = true);
+      return;
+    }
+
+    final user = FirebaseAuth.instance.currentUser;
+
+    if (user == null) {
+      setState(() {
+        isFirstLaunch = false;
+        nextPage = const NavigationPage(); //Guest Mode
+      });
+      return;
+    }
+
+    // 🔥 Fetch role from Firestore
+    final doc = await FirebaseFirestore.instance
+        .collection("users")
+        .doc(user.uid)
+        .get();
+
+    final role = doc.data()?["role"] ?? "user";
+
     setState(() {
-      isFirstLaunch = !seen;
+      isFirstLaunch = false;
+      nextPage = role == "admin"
+          ? const AdminNavigationPage()
+          : const NavigationPage();
     });
   }
 
@@ -45,7 +75,6 @@ class _AppStartGateState extends State<AppStartGate> {
         onFinished: () async {
           final prefs = await SharedPreferences.getInstance();
           await prefs.setBool('seenGetStarted', true);
-
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(builder: (_) => const NavigationPage()),
@@ -55,9 +84,13 @@ class _AppStartGateState extends State<AppStartGate> {
     }
 
     // NOT FIRST LAUNCH
-    final user = FirebaseAuth.instance.currentUser;
+    if (nextPage == null) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
 
-    // Guest OR Logged-in → Home
-    return const NavigationPage();
+    return nextPage!;
+
   }
 }
