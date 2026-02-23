@@ -15,7 +15,8 @@ class AuthService {
   Future<AppUser?> signUp({
     required String email, 
     required String password, 
-    String? phone}) 
+    String? phone, 
+    required String name}) 
     async {
     //create auth account
     final credential = await _auth.createUserWithEmailAndPassword(
@@ -33,6 +34,8 @@ class AuthService {
       email: email,
       role: "user", //default 
       phoneNumber: phone,
+      name: name,
+      createdAt: DateTime.now(),
     );
 
     await _firestore

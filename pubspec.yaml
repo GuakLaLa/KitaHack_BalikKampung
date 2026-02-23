@@ -46,10 +46,11 @@ dependencies:
   fl_chart: ^1.1.1
   url_launcher: ^6.2.5
   image_picker: ^1.0.4
-  location: ^5.0.1
   google_maps_flutter: ^2.5.0
-  intl: ^0.18.1
-  geocoding: ^2.0.0
+  geocoding: ^4.0.0
+  intl: ^0.20.2
+  google_generative_ai: ^0.4.7
+  location: ^5.0.1
   google_places_flutter: ^2.1.1
 
 dev_dependencies:
@@ -80,6 +81,7 @@ flutter:
   #   - images/a_dot_ham.jpeg
   assets:
     - .env
+    - assets/get_started_bg.png
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images
