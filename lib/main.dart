@@ -1,10 +1,4 @@
 import 'package:floodsense/home/app_start_gate.dart';
-import 'package:floodsense/navigation.dart';
-import 'package:floodsense/home/getStarted_page.dart';
-import 'package:floodsense/home/home_page.dart';
-import 'package:floodsense/map/map_page.dart';
-import 'package:floodsense/profile/profile_page.dart';
-import 'package:floodsense/report/report_page.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:floodsense/firebase_options.dart';

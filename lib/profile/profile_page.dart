@@ -134,11 +134,18 @@ class _ProfilePageState extends State<ProfilePage> {
                     //Profile Header
                     Row(
                       children: [
-                        const CircleAvatar(
+                        CircleAvatar(
                           radius: 35,
                           backgroundColor: Colors.blueGrey,
-                          child: Icon(Icons.person,
-                              size: 40, color: Colors.white),
+                          backgroundImage: data['photoUrl'] != null &&
+                                  data['photoUrl'].toString().isNotEmpty
+                              ? NetworkImage(data['photoUrl'])
+                              : null,
+                          child: data['photoUrl'] == null ||
+                                  data['photoUrl'].toString().isEmpty
+                              ? const Icon(Icons.person,
+                                  size: 40, color: Colors.white)
+                              : null,
                         ),
                         const SizedBox(width: 16),
                         Expanded(
@@ -146,10 +153,10 @@ class _ProfilePageState extends State<ProfilePage> {
                             crossAxisAlignment:
                                 CrossAxisAlignment.start,
                             children: [
-                              Text("Name: ${data['name'] ?? ''}"),
+                              Text("Name: ${data['name'] ?? ''}", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),),
                               Text("Gender: ${data['gender'] ?? ''}"),
                               Text("Email: ${user.email ?? ''}"),
-                              Text("Phone Number: ${data['phone'] ?? ''}"),
+                              Text("Phone Number: ${data['phoneNumber'] ?? ''}"),
                             ],
                           ),
                         )

@@ -1,8 +1,11 @@
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:floodsense/home/home_page.dart';
 import 'package:floodsense/map/map_page.dart';
 import 'package:floodsense/profile/profile_page.dart';
 import 'package:floodsense/report/report_page.dart';
 import 'package:flutter/material.dart';
+import 'package:floodsense/auth/app_user.dart';
 
 class NavigationPage extends StatefulWidget{
   const NavigationPage({super.key});
@@ -14,6 +17,11 @@ class NavigationPage extends StatefulWidget{
 class _FirstPageState extends State<NavigationPage> {
   //this keep track of the selected index
   int _selectedIndex = 0;
+
+  final User? user = FirebaseAuth.instance.currentUser;
+
+  static const Color unselectedColor = Color.fromARGB(255, 116, 114, 114);
+  static const Color selectedColor = Color.fromARGB(255, 68, 219, 233);
 
   //this method updates the new selected index
   void _navigateBottomBar(int index){
@@ -49,45 +57,177 @@ class _FirstPageState extends State<NavigationPage> {
   @override
   Widget build(BuildContext context){
     return Scaffold(
-      
       appBar: AppBar(
-          title: Text(_titles[_selectedIndex]),
-          backgroundColor: Color(0xFFA6E3E9),
-          elevation: 0,
-          leading: Icon(Icons.menu),
-          actions: [
-            IconButton(onPressed: () {}, icon: Icon(Icons.person),
-),
-          ],
-        ),
+        title: Text(_titles[_selectedIndex]),
+        backgroundColor: Color(0xFFA6E3E9),
+        centerTitle: true,
+        elevation: 0,
+      ),
 
+      drawer: _buildDrawer(),
       body: _pages[_selectedIndex],
 
       bottomNavigationBar: BottomNavigationBar(
-        unselectedItemColor: Color.fromARGB(255, 165, 165, 165),
-        selectedItemColor: Color.fromARGB(255, 68, 219, 233),
+        unselectedItemColor: unselectedColor,
+        selectedItemColor: selectedColor,
         currentIndex: _selectedIndex,
         onTap: _navigateBottomBar, 
         items: [
-        //home
-        BottomNavigationBarItem(
-          icon: Icon(Icons.home),
-          label: 'Home',
-        ),
-        BottomNavigationBarItem(
+          BottomNavigationBarItem(
+            icon: Icon(Icons.home),
+            label: 'Home',
+          ),
+          BottomNavigationBarItem(
           icon: Icon(Icons.map),
           label: 'Map',
-        ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.list_alt),
-          label: 'Report',
-        ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.person),
-          label: 'Profile',
-        ),
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.list_alt),
+            label: 'Report',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.person),
+            label: 'Profile',
+          ),
+        ]
+      ),  
+    );
+  }
 
-      ]),  
+  // ================= DRAWER =================
+
+  Widget _buildDrawer() {
+    if (user == null) {
+      return Drawer(
+        child: SafeArea(child: _buildGuestDrawer()),
+      );
+    }
+
+    return Drawer(
+      child: SafeArea(
+        child: StreamBuilder<DocumentSnapshot>(
+          stream: FirebaseFirestore.instance
+              .collection('users')
+              .doc(user!.uid)
+              .snapshots(),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            }
+
+            if (!snapshot.hasData || !snapshot.data!.exists) {
+              return _buildGuestDrawer();
+            }
+
+            final data =
+                snapshot.data!.data() as Map<String, dynamic>;
+            final appUser = AppUser.fromJson(data);
+
+            return ListView(
+              padding: EdgeInsets.zero,
+              children: [
+
+                UserAccountsDrawerHeader(
+                  margin: EdgeInsets.zero,
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFA6E3E9),
+                  ),
+
+                  accountName: Text(
+                    appUser.name,
+                    style: const TextStyle(
+                      color: Colors.black,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+
+                  accountEmail: Text(
+                    appUser.email,
+                    style: const TextStyle(
+                      color: Colors.black,
+                    ),
+                  ),
+
+                  currentAccountPicture: CircleAvatar(
+                    backgroundColor: Colors.white,
+                    backgroundImage: appUser.photoUrl != null
+                        ? NetworkImage(appUser.photoUrl!)
+                        : null,
+                    child: appUser.photoUrl == null
+                        ? const Icon(Icons.person, size: 35)
+                        : null,
+                  ),
+                ),
+
+                _buildDrawerItem(Icons.home, "Home", 0),
+                _buildDrawerItem(Icons.map, "Map", 1),
+                _buildDrawerItem(Icons.list_alt, "Report", 2),
+                _buildDrawerItem(Icons.person, "Profile", 3),
+
+                const Divider(),
+
+                ListTile(
+                  leading: const Icon(Icons.logout),
+                  title: const Text("Logout"),
+                  onTap: () async {
+                    Navigator.pop(context);
+                    await FirebaseAuth.instance.signOut();
+                  },
+                ),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  // ================= DRAWER ITEMS =================
+
+  Widget _buildDrawerItem(IconData icon, String title, int index) {
+    final bool isSelected = _selectedIndex == index;
+
+    return ListTile(
+      leading: Icon(
+        icon,
+        color: isSelected ? selectedColor : unselectedColor,
+      ),
+      title: Text(
+        title,
+        style: TextStyle(
+          color: isSelected ? selectedColor : unselectedColor,
+          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+        ),
+      ),
+      selected: isSelected,
+      onTap: () {
+        Navigator.pop(context);
+        setState(() {
+          _selectedIndex = index;
+        });
+      },
+    );
+  }
+
+
+  // ================= GUEST DRAWER =================
+
+  Widget _buildGuestDrawer() {
+    return Column(
+      children: const [
+        UserAccountsDrawerHeader(
+          decoration: BoxDecoration(
+            color: Color(0xFFA6E3E9),
+          ),
+          accountName: Text("Guest User"),
+          accountEmail: Text("Not logged in"),
+          currentAccountPicture: CircleAvatar(
+            backgroundColor: Colors.white,
+            child: Icon(Icons.person, size: 35),
+          ),
+        ),
+      ],
     );
   }
 }

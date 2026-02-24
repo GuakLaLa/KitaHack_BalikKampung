@@ -6,7 +6,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 
 import 'package:floodsense/home/getStarted_page.dart';
 import 'package:floodsense/navigation.dart';
-import 'package:floodsense/auth/login_page.dart';
 
 class AppStartGate extends StatefulWidget {
   const AppStartGate({super.key});

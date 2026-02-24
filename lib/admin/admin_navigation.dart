@@ -14,6 +14,9 @@ class _AdminNavigationPageState extends State<AdminNavigationPage> {
 
   int currentIndex = 0;
 
+  static const Color unselectedColor = Color.fromARGB(255, 116, 114, 114);
+  static const Color selectedColor = Color.fromARGB(255, 68, 219, 233);
+
   final pages = const [
     AdminDashboardPage(),
     AdminReportsPage(),
@@ -26,6 +29,8 @@ class _AdminNavigationPageState extends State<AdminNavigationPage> {
       body: pages[currentIndex],
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: currentIndex,
+        unselectedItemColor: unselectedColor,
+        selectedItemColor: selectedColor,
         onTap: (index) {
           setState(() {
             currentIndex = index;

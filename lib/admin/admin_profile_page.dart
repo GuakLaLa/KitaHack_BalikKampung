@@ -18,8 +18,6 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
   String email = "";
   String role = "";
 
-  bool _dialogShown = false;
-
   @override
   void initState() {
     super.initState();
@@ -55,49 +53,13 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
   );
   }
 
-  void _showLoginDialog(BuildContext context) {
-    if (_dialogShown) return;
-    _dialogShown = true;
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) => AlertDialog(
-          title: const Text("Login Required"),
-          content: const Text(
-              "You need to login or create an account to access your profile."),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.pop(context);
-                _dialogShown = false;
-              },
-              child: const Text("Cancel"),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                Navigator.pop(context);
-                Navigator.pushAndRemoveUntil(
-                  context,
-                  MaterialPageRoute(builder: (_) => LoginPage()),
-                  (route) => false,
-                );
-              },
-              child: const Text("Login"),
-            ),
-          ],
-        ),
-      );
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text("Admin Profile"),
         centerTitle: true,
+        backgroundColor: Color(0xFFA6E3E9),
       ),
       body: Padding(
         padding: const EdgeInsets.all(20),

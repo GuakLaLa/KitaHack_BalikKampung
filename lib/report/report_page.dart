@@ -121,14 +121,14 @@ class _ReportPageState extends State<ReportPage> {
       stream: FirebaseAuth.instance.authStateChanges(),
       builder: (context, authSnapshot) {
 
-        // 🔄 Waiting
+        //Waiting
         if (authSnapshot.connectionState == ConnectionState.waiting) {
           return const Scaffold(
             body: Center(child: CircularProgressIndicator()),
           );
         }
 
-        // ❌ Not logged in
+        //Not logged in
         if (!authSnapshot.hasData) {
           _showLoginDialog(context);
 
@@ -141,115 +141,115 @@ class _ReportPageState extends State<ReportPage> {
 
         final user = authSnapshot.data!;
     
-    return Scaffold(
-      body: Padding(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const Text(
-            "Phone Call",
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-            )
-          ),
-
-          const SizedBox(height: 20),
-
-          _buildCallButton(
-            context,
-            title: "Emergency Services",
-            number: "999",
-          ),
-
-          const SizedBox(height: 20),
-
-          _buildCallButton(
-            context,
-            title: "Flood Response Team",
-            number: "",
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => const AdvancedFloodHotlinePage(),
+        return Scaffold(
+            body: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text(
+                  "Phone Call",
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  )
                 ),
-              );
-            },
-),
 
-          const SizedBox(height: 20),
+                const SizedBox(height: 20),
 
-          FutureBuilder<String?>(
-            future: _getUserEmergencyContact(),
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Center(child: CircularProgressIndicator());
-              }
-
-              final number = snapshot.data;
-
-              return _buildCallButton(
-                context,
-                title: number != null
-                    ? "Emergency Contact\n($number)"
-                    : "Set Emergency Contact",
-
-                number: number ?? "",
-
-                onPressed: (){ 
-                  if (number == null || number.isEmpty) {
-                    _showMissingContactDialog(context);
-                  } else {
-                    _makePhoneCall(number);
-                  } 
-                },
-              );
-            },
-          ),
-
-          const SizedBox(height: 30),
-
-          const Text(
-            "Emergency Help Needed Form",
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-
-          const SizedBox(height: 15),
-
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF9ED0D6),
-              padding: const EdgeInsets.symmetric(vertical: 18),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
-              ),
-              elevation: 5,
-            ),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const EmergencyFormPage(),
+                _buildCallButton(
+                  context,
+                  title: "Emergency Services",
+                  number: "999",
                 ),
-              );
-            },
-            child: const Text(
-              "Emergency Form",
-              style: TextStyle(
-                fontSize: 16,
-                color: Colors.black,
-              ),
+
+                const SizedBox(height: 20),
+
+                _buildCallButton(
+                  context,
+                  title: "Flood Response Team",
+                  number: "",
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const AdvancedFloodHotlinePage(),
+                      ),
+                    );
+                  },
+               ),
+
+                const SizedBox(height: 20),
+
+                FutureBuilder<String?>(
+                  future: _getUserEmergencyContact(),
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+
+                    final number = snapshot.data;
+
+                    return _buildCallButton(
+                      context,
+                      title: number != null
+                          ? "Emergency Contact\n($number)"
+                          : "Set Emergency Contact",
+
+                      number: number ?? "",
+
+                      onPressed: (){ 
+                        if (number == null || number.isEmpty) {
+                          _showMissingContactDialog(context);
+                        } else {
+                          _makePhoneCall(number);
+                        } 
+                      },
+                    );
+                  },
+                ),
+
+                const SizedBox(height: 30),
+
+                const Text(
+                  "Emergency Help Needed Form",
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+
+                const SizedBox(height: 15),
+
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF9ED0D6),
+                    padding: const EdgeInsets.symmetric(vertical: 18),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    elevation: 5,
+                  ),
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const EmergencyFormPage(),
+                      ),
+                    );
+                  },
+                  child: const Text(
+                    "Emergency Form",
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: Colors.black,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
-        ],
-      ),
-    ),
-    );
+        );
       },
     );
   }

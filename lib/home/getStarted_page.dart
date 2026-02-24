@@ -1,4 +1,3 @@
-import 'package:floodsense/auth/login_page.dart';
 import 'package:floodsense/auth/signup_page.dart';
 import 'package:flutter/material.dart';
 

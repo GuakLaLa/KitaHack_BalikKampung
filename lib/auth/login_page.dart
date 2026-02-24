@@ -243,7 +243,7 @@ class _LoginPageState extends State<LoginPage> {
               const SizedBox(height: 12),
 
               Align(
-                alignment: Alignment.centerLeft,
+                alignment: Alignment.center,
                 child: TextButton(
                   onPressed: () {
                     Navigator.push(

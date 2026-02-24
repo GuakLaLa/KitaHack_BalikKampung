@@ -33,6 +33,8 @@ class AdminReportsPage extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text("Submitted Reports"),
+        centerTitle: true,
+        backgroundColor: Color(0xFFA6E3E9),
       ),
       body: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance
@@ -139,8 +141,8 @@ class AdminReportsPage extends StatelessWidget {
                                 _navigateToLocation(
                                     latitude, longitude);
                               },
-                              icon: const Icon(Icons.navigation),
-                              label: const Text("Navigate", style: TextStyle(color: Colors.grey),),
+                              icon: const Icon(Icons.navigation, color: Color.fromARGB(255, 68, 219, 233)),
+                              label: const Text("Navigate", style: TextStyle(color: Color.fromARGB(255, 116, 114, 114)),),
                             ),
 
                             const SizedBox(width: 8),
@@ -150,7 +152,7 @@ class AdminReportsPage extends StatelessWidget {
                             onPressed: () {
                               _showDetailsDialog(context, doc);
                             },
-                            child: const Text("View Details", style: TextStyle(color: Colors.grey)),
+                            child: const Text("View Details", style: TextStyle(color: Color.fromARGB(255, 116, 114, 114))),
                           ),
                         ],
                       ),

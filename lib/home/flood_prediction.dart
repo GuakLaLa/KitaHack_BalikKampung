@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:geolocator/geolocator.dart';
 import 'flood_timer.dart';
 
 class FloodPredictionCard extends StatelessWidget {

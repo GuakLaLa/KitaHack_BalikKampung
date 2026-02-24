@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'package:image_picker/image_picker.dart';
+import 'dart:io';
 
 class EditProfilePage extends StatefulWidget {
   const EditProfilePage({super.key});
@@ -10,6 +13,9 @@ class EditProfilePage extends StatefulWidget {
 }
 
 class _EditProfilePageState extends State<EditProfilePage> {
+  File? _imageFile;
+  String? _photoUrl;
+  final ImagePicker _picker = ImagePicker();
 
   final user = FirebaseAuth.instance.currentUser;
 
@@ -40,7 +46,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
     final data = doc.data() ?? {};
 
     nameController.text = data['name'] ?? "";
-    phoneController.text = data['phone'] ?? "";
+    phoneController.text = data['phoneNumber'] ?? "";
     locationController.text = data['location'] ?? "";
     gender = data['gender'] ?? "Male";
 
@@ -49,22 +55,46 @@ class _EditProfilePageState extends State<EditProfilePage> {
     });
   }
 
+  Future<void> _pickImage() async {
+  final pickedFile =
+      await _picker.pickImage(source: ImageSource.gallery);
+
+  if (pickedFile != null) {
+    setState(() {
+      _imageFile = File(pickedFile.path);
+    });
+  }
+}
+
   Future<void> _saveProfile() async {
     if (!_formKey.currentState!.validate()) return;
 
     if (user == null) return;
 
+    String? imageUrl = _photoUrl;
+
+    if (_imageFile != null) {
+      final ref = FirebaseStorage.instance
+          .ref()
+          .child('profile_pictures')
+          .child('${user!.uid}.jpg');
+
+      await ref.putFile(_imageFile!);
+      imageUrl = await ref.getDownloadURL();
+    }
+
     try {
 
-      // 🔄 Update Firestore
+      //Update Firestore
       await FirebaseFirestore.instance
           .collection('users')
           .doc(user!.uid)
           .update({
         "name": nameController.text.trim(),
-        "phone": phoneController.text.trim(),
+        "phoneNumber": phoneController.text.trim(),
         "location": locationController.text.trim(),
         "gender": gender,
+        "photoUrl": imageUrl,
       });
 
       // 🔐 Update password if entered
@@ -107,6 +137,41 @@ class _EditProfilePageState extends State<EditProfilePage> {
           key: _formKey,
           child: Column(
             children: [
+
+              Center(
+                child: Stack(
+                  children: [
+                    CircleAvatar(
+                      radius: 60,
+                      backgroundImage: _imageFile != null
+                          ? FileImage(_imageFile!)
+                          : (_photoUrl != null
+                              ? NetworkImage(_photoUrl!) as ImageProvider
+                              : null),
+                      child: _imageFile == null && _photoUrl == null
+                          ? const Icon(Icons.person, size: 60)
+                          : null,
+                    ),
+                    Positioned(
+                      bottom: 0,
+                      right: 0,
+                      child: GestureDetector(
+                        onTap: _pickImage,
+                        child: const CircleAvatar(
+                          radius: 18,
+                          backgroundColor: Colors.blue,
+                          child: Icon(
+                            Icons.camera_alt,
+                            size: 18,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 30),
 
               // Name
               TextFormField(

@@ -5,6 +5,7 @@ class AppUser {
   final String email;
   final String name;
   final String role;
+  final String? gender;
 
   final String? phoneNumber;
   final String? photoUrl;
@@ -24,6 +25,7 @@ class AppUser {
     required this.email,
     required this.name,
     required this.role,
+    this.gender,
     this.phoneNumber,
     this.photoUrl,
     required this.createdAt,
@@ -41,6 +43,7 @@ class AppUser {
       'email': email,
       'name': name,
       'role': role,
+      'gender': gender,
       'phoneNumber': phoneNumber,
       'photoUrl': photoUrl,
       'createdAt': Timestamp.fromDate(createdAt),
@@ -59,6 +62,7 @@ class AppUser {
       email: json['email'],
       name: json['name'],
       role: json['role'],
+      gender: json['gender'],
       phoneNumber: json['phoneNumber'],
       photoUrl: json['photoUrl'],
       createdAt: (json['createdAt'] as Timestamp).toDate(),

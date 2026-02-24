@@ -11,6 +11,7 @@ class AdminDashboardPage extends StatelessWidget {
       appBar: AppBar(
         title: const Text("Admin Dashboard"),
         centerTitle: true,
+        backgroundColor: Color(0xFFA6E3E9),
       ),
       body: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance
