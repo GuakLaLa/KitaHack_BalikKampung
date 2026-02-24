@@ -129,69 +129,108 @@ Future<void> buildClusteredMarkers(
   final RainfallAnomalyService rainfallService = RainfallAnomalyService();
   final BitmapDescriptor warningIcon = await loadWarningMarker();
 
-  // ---------------- GROUP BY EXACT LAT/LNG ----------------
-  Map<String, List<QueryDocumentSnapshot>> locationGroups = {};
+  // ---------------- DISTANCE-BASED CLUSTERING ----------------
+  List<List<QueryDocumentSnapshot>> clusters = [];
+
   for (var doc in docs) {
-    final key = "${doc['latitude']}_${doc['longitude']}";
-    locationGroups.putIfAbsent(key, () => []);
-    locationGroups[key]!.add(doc);
+    final double lat = doc['latitude'];
+    final double lng = doc['longitude'];
+
+    bool addedToCluster = false;
+
+    for (var cluster in clusters) {
+      final double clusterLat = cluster.first['latitude'];
+      final double clusterLng = cluster.first['longitude'];
+
+      double distance = Geolocator.distanceBetween(
+        lat,
+        lng,
+        clusterLat,
+        clusterLng,
+      );
+
+      if (distance <= clusterRadiusMeters) {
+        cluster.add(doc);
+        addedToCluster = true;
+        break;
+      }
+    }
+
+    if (!addedToCluster) {
+      clusters.add([doc]);
+    }
   }
 
-  // ---------------- PROCESS EACH LOCATION ----------------
-  for (var entry in locationGroups.entries) {
-    final cluster = entry.value;
+  // ---------------- PROCESS EACH CLUSTER ----------------
+  for (var cluster in clusters) {
+    // -------- Compute cluster center (average lat/lng) --------
+    double avgLat = 0;
+    double avgLng = 0;
 
-    final double lat = cluster.first['latitude'];
-    final double lng = cluster.first['longitude'];
+    for (var doc in cluster) {
+      avgLat += doc['latitude'];
+      avgLng += doc['longitude'];
+    }
 
-    // -------- Distance Filter (5km from user) --------
+    avgLat /= cluster.length;
+    avgLng /= cluster.length;
+
+    // -------- Distance filter (5km from user) --------
     double distanceToUser = Geolocator.distanceBetween(
       userPosition.latitude,
       userPosition.longitude,
-      lat,
-      lng,
+      avgLat,
+      avgLng,
     );
 
     if (distanceToUser > maxDistanceMeters) continue;
 
-    // -------- Sort by newest first --------
+    // -------- Sort by newest --------
     cluster.sort((a, b) => b['timestamp'].compareTo(a['timestamp']));
     final Timestamp newestTimestamp = cluster.first['timestamp'];
     final DateTime newestDate = newestTimestamp.toDate();
 
     // -------- EXACT 72 HOUR CHECK --------
     final Duration age = DateTime.now().difference(newestDate);
+
     if (age >= const Duration(days: 3)) {
       WriteBatch batch = firestore.batch();
       for (var doc in cluster) {
         batch.delete(firestore.collection('floodreports').doc(doc.id));
       }
+
       try {
         await batch.commit();
-        print("Deleted ${cluster.length} old reports at $lat, $lng");
+        print("Deleted ${cluster.length} old reports at $avgLat, $avgLng");
       } catch (e) {
         print("Batch delete error: $e");
       }
-      if (onClusterDeleted != null) onClusterDeleted(cluster);
+
+      if (onClusterDeleted != null) {
+        onClusterDeleted(cluster);
+      }
+
       continue; // Skip marker creation
     }
 
-    // -------- Marker Display --------
+    // -------- Marker Display Logic --------
     bool showMarker = false;
 
     // Condition 1: 3 or more reports
     if (cluster.length >= 3) {
       showMarker = true;
     } else {
-      // Condition 2: Rainfall anomaly
       try {
-        final anomaly = await rainfallService.fetchAndAnalyze(lat, lng);
+        // Condition 2: Rainfall anomaly
+        final anomaly = await rainfallService.fetchAndAnalyze(avgLat, avgLng);
+
         if (anomaly.riskLevel.contains('HIGH') ||
             anomaly.riskLevel.contains('EXTREME')) {
           showMarker = true;
         } else {
           // Condition 3: Flood risk
-          final floodRisk = await fetchFloodRisk(lat, lng);
+          final floodRisk = await fetchFloodRisk(avgLat, avgLng);
+
           if (floodRisk != null &&
               (floodRisk.toUpperCase() == 'HIGH' ||
                   floodRisk.toUpperCase() == 'MEDIUM')) {
@@ -199,7 +238,7 @@ Future<void> buildClusteredMarkers(
           }
         }
       } catch (e) {
-        print("Rainfall/flood fetch error at $lat, $lng: $e");
+        print("Rainfall/flood fetch error at $avgLat, $avgLng: $e");
       }
     }
 
@@ -208,19 +247,19 @@ Future<void> buildClusteredMarkers(
     // -------- Add Marker --------
     newMarkers.add(
       Marker(
-        markerId: MarkerId("cluster_${lat}_${lng}_${cluster.length}"),
-        position: LatLng(lat, lng),
+        markerId: MarkerId("cluster_${avgLat}_${avgLng}_${cluster.length}"),
+        position: LatLng(avgLat, avgLng),
         icon: warningIcon,
         infoWindow: InfoWindow(
           title: "Flood Reports",
-          snippet: "${cluster.length} reports at this location",
+          snippet: "${cluster.length} reports at this area",
         ),
         onTap: () {
           Navigator.push(
             context,
             MaterialPageRoute(
               builder: (_) =>
-                  FloodDetailsPage(latitude: lat, longitude: lng),
+                  FloodDetailsPage(clusterDocs: cluster),
             ),
           );
         },
