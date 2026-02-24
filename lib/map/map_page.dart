@@ -94,7 +94,7 @@ class _MapPageState extends State<MapPage> {
     }
   }
 
-  // ---------------- clustering ----------------
+  // ---------------- Clustering ----------------
   void _listenFloodReports() {
     _floodSubscription =
         firestore.collection('floodreports').snapshots().listen((
