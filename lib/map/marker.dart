@@ -121,6 +121,7 @@ Future<void> buildClusteredMarkers(
     Position userPosition, {
       required void Function(Set<Marker> newMarkers) onUpdateMarkers,
       required BuildContext context,
+      required String selectedDistrict,
       double clusterRadiusMeters = 200,
       double maxDistanceMeters = 5000,
       void Function(List<QueryDocumentSnapshot> deletedCluster)? onClusterDeleted,
@@ -222,7 +223,7 @@ Future<void> buildClusteredMarkers(
     } else {
       try {
         // Condition 2: Rainfall anomaly
-        final anomaly = await rainfallService.fetchAndAnalyze(avgLat, avgLng);
+        final anomaly = await rainfallService.fetchAndAnalyze(selectedDistrict);
 
         if (anomaly.riskLevel.contains('HIGH') ||
             anomaly.riskLevel.contains('EXTREME')) {

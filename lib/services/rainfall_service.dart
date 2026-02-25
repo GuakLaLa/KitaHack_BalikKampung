@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
-import 'weather_service.dart';
 
 /// Model for a single day's rainfall
 class RainfallData {
@@ -25,6 +24,21 @@ class RainfallData {
       source: json['source'],
     );
   }
+}
+
+/// District → lat/lon coordinates (matches all supported districts)
+class DistrictCoordinates {
+  static const Map<String, Map<String, double>> coordinates = {
+    'Kota_Bharu_Kelantan':     {'lat': 6.1256,  'lon': 102.2386},
+    'Kota_Tinggi_Johor':       {'lat': 1.7381,  'lon': 103.8999},
+    'Kuantan_Pahang':          {'lat': 3.8077,  'lon': 103.3260},
+    'Pekan_Nanas_Johor':       {'lat': 1.5148,  'lon': 103.5141},
+    'Penang_Island':           {'lat': 5.4141,  'lon': 100.3288},
+    'Rantau_Panjang_Kelantan': {'lat': 6.0196,  'lon': 101.9721},
+    'Segamat_Johor':           {'lat': 2.5148,  'lon': 102.8158},
+    'Serian_Sarawak':          {'lat': 1.1778,  'lon': 110.5733},
+    'Shah_Alam_Selangor':      {'lat': 3.0738,  'lon': 101.5183},
+  };
 }
 
 /// Analysis result
@@ -58,35 +72,28 @@ class RainfallAnomalyAnalysis {
 
 /// Service to fetch rainfall and analyze anomalies
 class RainfallAnomalyService {
-  final GoogleWeatherService _weatherService = GoogleWeatherService();
-
-  /// Fetch rainfall data from Open-Meteo (includes past days + today)
+  /// Fetch rainfall data from Open-Meteo for a given lat/lon
   Future<List<RainfallData>> fetchRainfallData(
     double lat,
     double lon, {
-    int days = 8, // 7 past days + today
+    required String locationName,
+    int days = 8,
   }) async {
     try {
-      final now = DateTime.now();
-
-      // Open-Meteo Forecast API supports past_days parameter
-      // This gets us historical data + today's forecast/observation
-      final pastDays = days - 1; // e.g., if days=8, get 7 past days + today
+      final pastDays = days - 1;
 
       final url = Uri.parse(
-        'https://api.open-meteo.com/v1/forecast' 
+        'https://api.open-meteo.com/v1/forecast'
         '?latitude=$lat&longitude=$lon'
         '&daily=precipitation_sum'
-        '&past_days=$pastDays' // ← Get past days
-        '&forecast_days=1' // ← Get today
+        '&past_days=$pastDays'
+        '&forecast_days=1'
         '&timezone=auto',
       );
 
       print('Fetching Open-Meteo rainfall (past $pastDays days + today): $url');
 
-      final response = await http.get(url).timeout(
-        const Duration(seconds: 8),
-      );
+      final response = await http.get(url).timeout(const Duration(seconds: 8));
 
       if (response.statusCode != 200) {
         throw Exception('Open-Meteo API error: ${response.statusCode}');
@@ -101,9 +108,7 @@ class RainfallAnomalyService {
       final times = List<String>.from(data['daily']['time']);
       final precs = List<dynamic>.from(data['daily']['precipitation_sum']);
 
-      final locationName = await _weatherService.getLocationName(lat, lon);
-
-      final rainfallData = List.generate(times.length, (i) {
+      return List.generate(times.length, (i) {
         return RainfallData(
           date: DateTime.parse(times[i]),
           rainfallMm: (precs[i] ?? 0.0).toDouble(),
@@ -111,25 +116,22 @@ class RainfallAnomalyService {
           source: 'Open-Meteo',
         );
       });
-
-      // print('Fetched ${rainfallData.length} days of rainfall from Open-Meteo');
-      // print('   Range: ${times.first} to ${times.last}');
-      // print('   Today (${times.last}): ${precs.last}mm');
-      
-      return rainfallData;
     } catch (e) {
       print('Error fetching Open-Meteo rainfall: $e');
-      return _generateFallbackRainfall(lat, lon, days);
+      return _generateFallbackRainfall(lat, lon, days, locationName);
     }
   }
 
   /// Fallback realistic rainfall data
-  List<RainfallData> _generateFallbackRainfall(double lat, double lon, int days) {
+  List<RainfallData> _generateFallbackRainfall(
+    double lat,
+    double lon,
+    int days,
+    String locationName,
+  ) {
     final now = DateTime.now();
     final isTropical = lat > -30 && lat < 30;
     final isMonsoon = (now.month >= 11 || now.month <= 2);
-
-    final locationName = 'Bukit Mertajam'; // fallback location
 
     return List.generate(days, (index) {
       final daysAgo = (days - 1) - index;
@@ -137,9 +139,13 @@ class RainfallAnomalyService {
           .subtract(Duration(days: daysAgo));
 
       double base = 0.0;
-      if (isTropical && isMonsoon) base = 10.0 + (index % 3) * 20.0;
-      else if (isTropical) base = 5.0 + (index % 4) * 10.0;
-      else base = 2.0 + (index % 5) * 5.0;
+      if (isTropical && isMonsoon) {
+        base = 10.0 + (index % 3) * 20.0;
+      } else if (isTropical) {
+        base = 5.0 + (index % 4) * 10.0;
+      } else {
+        base = 2.0 + (index % 5) * 5.0;
+      }
 
       final variation = (index.hashCode % 10 - 5) * 1.5;
 
@@ -152,10 +158,11 @@ class RainfallAnomalyService {
     });
   }
 
-  /// Analyze rainfall anomaly
+  /// Analyze rainfall anomaly from raw data
   RainfallAnomalyAnalysis analyzeRainfallAnomaly(
-      List<RainfallData> rainfallData,
-      {String? locationName}) {
+    List<RainfallData> rainfallData, {
+    String? locationName,
+  }) {
     if (rainfallData.isEmpty) throw Exception('No rainfall data');
 
     final todayRainfall = rainfallData.last.rainfallMm;
@@ -163,14 +170,17 @@ class RainfallAnomalyService {
         ? rainfallData.sublist(rainfallData.length - 7)
         : rainfallData;
 
-    final last7DaysExclToday =
-        last7Days.length > 1 ? last7Days.sublist(0, last7Days.length - 1) : last7Days;
+    final last7DaysExclToday = last7Days.length > 1
+        ? last7Days.sublist(0, last7Days.length - 1)
+        : last7Days;
 
     double total = 0, cumulative = 0;
     for (var d in last7DaysExclToday) total += d.rainfallMm;
     for (var d in last7Days) cumulative += d.rainfallMm;
 
-    final avg = last7DaysExclToday.isNotEmpty ? total / last7DaysExclToday.length : 0.0;
+    final avg = last7DaysExclToday.isNotEmpty
+        ? total / last7DaysExclToday.length
+        : 0.0;
 
     final ratio = avg > 0.1 ? todayRainfall / avg : todayRainfall / 10.0;
 
@@ -191,51 +201,75 @@ class RainfallAnomalyService {
     );
   }
 
-  /// Determine risk level
+  String _formatDistrictName(String district) {
+    return district.replaceAll('_', ' ');
+  }
+  /// Determine risk level from today's rainfall and ratio
   Map<String, dynamic> _determineRisk(double today, double ratio) {
-    if (ratio < 1.2 && today < 20) {
-      return {
-        'level': '✅ NORMAL',
-        'description': 'Rainfall within normal range',
-        'anomalyType': 'Normal',
-        'color': const Color(0xFF10B981),
-        'recommendation': 'NORMAL: No immediate action required.',
-      };
-    } else if (ratio >= 1.2 && ratio < 2.0) {
-      return {
-        'level': '🟡 ELEVATED',
-        'description': 'Rainfall above normal',
-        'anomalyType': 'Above Normal',
-        'color': const Color(0xFFFBBF24),
-        'recommendation': 'Monitor areas for increased water levels.',
-      };
-    } else if (ratio >= 2.0 && ratio < 3.0 || today >= 40) {
-      return {
-        'level': '🟠 HIGH ANOMALY',
-        'description': 'Rainfall significantly higher than recent days',
-        'anomalyType': 'Significantly Above Normal',
-        'color': const Color(0xFFEA580C),
-        'recommendation': 'Prepare for potential flooding.',
-      };
-    } else {
-      return {
-        'level': '🔴 EXTREME ANOMALY',
-        'description': 'Extreme rainfall event detected',
-        'anomalyType': 'Extreme Anomaly',
-        'color': const Color(0xFFDC2626),
-        'recommendation': 'Immediate action required: Flash floods likely.',
-      };
-    }
+  // Very heavy rain — always extreme regardless of ratio
+  if (today >= 60) {
+    return {
+      'level': 'EXTREME ANOMALY',
+      'description': 'Rainfall far above recent average',
+      'anomalyType': 'Extreme Anomaly',
+      'color': const Color(0xFFDC2626),
+      'recommendation': 'Extreme rainfall pattern detected. Check flood prediction for risk assessment.',
+    };
   }
 
-  /// Fetch rainfall and analyze anomaly in one call
+  // Heavy rain (30-60mm) OR significant ratio with meaningful rain
+  if (today >= 30 || (ratio >= 2.5 && today >= 20)) {
+    return {
+      'level': 'HIGH ANOMALY',
+      'description': 'Rainfall significantly above recent average',
+      'anomalyType': 'Significantly Above Normal',
+      'color': const Color(0xFFEA580C),
+      'recommendation': 'Unusually high rainfall detected. Monitor local conditions.',
+    };
+  }
+
+  // Moderate rain or mildly above average (your screenshot case: 15.7mm at 4x → lands here)
+  if (today >= 10 || ratio >= 1.5) {
+    return {
+      'level': 'ELEVATED',
+      'description': 'Rainfall above recent average',
+      'anomalyType': 'Above Normal',
+      'color': const Color(0xFFFBBF24),
+      'recommendation': 'Rainfall is higher than usual. Stay weather-aware.',
+    };
+  }
+
+  // Light rain, nothing unusual
+  return {
+    'level': 'NORMAL',
+    'description': 'Rainfall within normal range',
+    'anomalyType': 'Normal',
+    'color': const Color(0xFF10B981),
+    'recommendation': 'No unusual rainfall activity detected.',
+  };
+}
+
+  /// Main entry point — fetch and analyze by district name
   Future<RainfallAnomalyAnalysis> fetchAndAnalyze(
-    double lat,
-    double lon, {
-    int days = 8, // 7 past days + today
+    String district, {
+    int days = 8,
   }) async {
-    final rainfallData = await fetchRainfallData(lat, lon, days: days);
-    final locationName = await _weatherService.getLocationName(lat, lon);
-    return analyzeRainfallAnomaly(rainfallData, locationName: locationName);
+    final coords = DistrictCoordinates.coordinates[district];
+
+    if (coords == null) {
+      throw Exception('District coordinates not found for: $district');
+    }
+
+    final lat = coords['lat']!;
+    final lon = coords['lon']!;
+
+    final rainfallData = await fetchRainfallData(
+      lat,
+      lon,
+      locationName: _formatDistrictName(district),
+      days: days,
+    );
+
+    return analyzeRainfallAnomaly(rainfallData, locationName: _formatDistrictName(district));
   }
 }

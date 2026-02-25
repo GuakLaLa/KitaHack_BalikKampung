@@ -3,13 +3,11 @@ import 'package:fl_chart/fl_chart.dart';
 import '../services/rainfall_service.dart';
 
 class RainfallAnomalyCard extends StatefulWidget {
-  final double latitude;
-  final double longitude;
+  final String selectedDistrict;
 
   const RainfallAnomalyCard({
     super.key,
-    required this.latitude,
-    required this.longitude,
+    required this.selectedDistrict,
   });
 
   @override
@@ -28,30 +26,36 @@ class _RainfallAnomalyCardState extends State<RainfallAnomalyCard> {
     _loadData();
   }
 
-  Future<void> _loadData() async {
-  setState(() => _isLoading = true);
-
-  try {
-    // Fetch rainfall analysis and location in one call
-    final analysis = await _service.fetchAndAnalyze(
-      widget.latitude,
-      widget.longitude,
-      days: 8, // 7 previous + today
-    );
-
-    if (mounted) {
-      setState(() {
-        _analysis = analysis;
-        _locationName = analysis.locationName;
-        _isLoading = false;
-      });
+  @override
+  void didUpdateWidget(covariant RainfallAnomalyCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.selectedDistrict != widget.selectedDistrict) {
+      _loadData();
     }
-  } catch (e) {
-    print('Error loading rainfall data: $e');
-    if (mounted) setState(() => _isLoading = false);
   }
-}
 
+  Future<void> _loadData() async {
+    setState(() => _isLoading = true);
+
+    try {
+      // fetchAndAnalyze now takes a district string directly
+      final analysis = await _service.fetchAndAnalyze(
+        widget.selectedDistrict,
+        days: 8,
+      );
+
+      if (mounted) {
+        setState(() {
+          _analysis = analysis;
+          _locationName = analysis.locationName;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      print('Error loading rainfall data: $e');
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -317,11 +321,7 @@ class _RainfallAnomalyCardState extends State<RainfallAnomalyCard> {
             ),
             child: Row(
               children: [
-                Icon(
-                  Icons.calendar_today,
-                  size: 16,
-                  color: Colors.grey[600],
-                ),
+                Icon(Icons.calendar_today, size: 16, color: Colors.grey[600]),
                 const SizedBox(width: 8),
                 Text(
                   '7-day cumulative: ',
@@ -403,16 +403,17 @@ class _RainfallAnomalyCardState extends State<RainfallAnomalyCard> {
                       if (value.toInt() >= 0 &&
                           value.toInt() < analysis.last7DaysData.length) {
                         final data = analysis.last7DaysData[value.toInt()];
-                        final isToday = value.toInt() ==
-                            analysis.last7DaysData.length - 1;
+                        final isToday =
+                            value.toInt() == analysis.last7DaysData.length - 1;
                         return Padding(
                           padding: const EdgeInsets.only(top: 8),
                           child: Text(
                             isToday ? 'Today' : _formatDateShort(data.date),
                             style: TextStyle(
                               fontSize: 11,
-                              fontWeight:
-                                  isToday ? FontWeight.w700 : FontWeight.w500,
+                              fontWeight: isToday
+                                  ? FontWeight.w700
+                                  : FontWeight.w500,
                               color: isToday
                                   ? analysis.riskColor
                                   : const Color(0xFF6B7280),
@@ -468,7 +469,9 @@ class _RainfallAnomalyCardState extends State<RainfallAnomalyCard> {
                   barRods: [
                     BarChartRodData(
                       toY: data.rainfallMm,
-                      color: isToday ? analysis.riskColor : const Color(0xFF4285F4),
+                      color: isToday
+                          ? analysis.riskColor
+                          : const Color(0xFF4285F4),
                       width: 16,
                       borderRadius: const BorderRadius.vertical(
                         top: Radius.circular(4),
@@ -490,11 +493,7 @@ class _RainfallAnomalyCardState extends State<RainfallAnomalyCard> {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(
-                Icons.info_outline,
-                size: 16,
-                color: Colors.grey[700],
-              ),
+              Icon(Icons.info_outline, size: 16, color: Colors.grey[700]),
               const SizedBox(width: 8),
               Text(
                 '7-day average: ${analysis.last7DaysAverage.toStringAsFixed(1)} mm',
@@ -575,11 +574,7 @@ class _RainfallAnomalyCardState extends State<RainfallAnomalyCard> {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(
-                  Icons.lightbulb_outline,
-                  size: 20,
-                  color: analysis.riskColor,
-                ),
+                Icon(Icons.lightbulb_outline, size: 20, color: analysis.riskColor),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
@@ -600,11 +595,7 @@ class _RainfallAnomalyCardState extends State<RainfallAnomalyCard> {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(
-                  Icons.help_outline,
-                  size: 16,
-                  color: analysis.riskColor,
-                ),
+                Icon(Icons.help_outline, size: 16, color: analysis.riskColor),
                 const SizedBox(width: 6),
                 Text(
                   'Why am I seeing this?',
@@ -630,25 +621,21 @@ class _RainfallAnomalyCardState extends State<RainfallAnomalyCard> {
       context: context,
       builder: (context) => AlertDialog(
         title: Row(
-  children: [
-    Icon(
-      Icons.info_outline,
-      color: analysis.riskColor,
-    ),
-    const SizedBox(width: 14),
-    Expanded(  // <-- Wrap the text with Expanded
-      child: Text(
-        'About Rainfall Anomaly',
-        style: const TextStyle(
-          fontWeight: FontWeight.w700,
-          fontSize: 16,
+          children: [
+            Icon(Icons.info_outline, color: analysis.riskColor),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Text(
+                'About Rainfall Anomaly',
+                style: const TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 16,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
         ),
-        overflow: TextOverflow.ellipsis, // optional, clips if too long
-      ),
-    ),
-  ],
-),
-
         content: SingleChildScrollView(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -659,7 +646,7 @@ class _RainfallAnomalyCardState extends State<RainfallAnomalyCard> {
               ),
               const SizedBox(height: 8),
               const Text(
-                'This card detects unusual rainfall patterns by comparing today\'s rainfall with the average of the last 7 days.',
+                'This card detects unusual rainfall patterns using both the absolute rainfall amount (mm) and how it compares to the recent 7-day average. This avoids false alarms during dry spells.',
                 style: TextStyle(fontSize: 14),
               ),
               const SizedBox(height: 16),
@@ -669,10 +656,10 @@ class _RainfallAnomalyCardState extends State<RainfallAnomalyCard> {
               ),
               const SizedBox(height: 8),
               Text(
-                '• Normal: Less than 1.2× average\n'
-                '• Above Normal: 1.2-2.0× average\n'
-                '• Significantly Above Normal: 2.0-3.0× average\n'
-                '• Extreme Anomaly: More than 3.0× average',
+                '• Normal: Light rain (<10mm) with no unusual spike\n'
+                '• Elevated: Moderate rain (<30mm) or mildly above average\n'
+                '• High Anomaly: Heavy rain (30–60mm) or significantly above average\n'
+                '• Extreme Anomaly: Very heavy rain (>60mm) regardless of average',
                 style: TextStyle(fontSize: 14, color: Colors.grey[700]),
               ),
               const SizedBox(height: 16),
@@ -686,7 +673,8 @@ class _RainfallAnomalyCardState extends State<RainfallAnomalyCard> {
                 decoration: BoxDecoration(
                   color: analysis.riskColor.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: analysis.riskColor.withOpacity(0.3)),
+                  border:
+                      Border.all(color: analysis.riskColor.withOpacity(0.3)),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -718,11 +706,7 @@ class _RainfallAnomalyCardState extends State<RainfallAnomalyCard> {
                 ),
                 child: Row(
                   children: [
-                    Icon(
-                      Icons.info,
-                      size: 14,
-                      color: Colors.grey[600],
-                    ),
+                    Icon(Icons.info, size: 14, color: Colors.grey[600]),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
@@ -750,7 +734,6 @@ class _RainfallAnomalyCardState extends State<RainfallAnomalyCard> {
     );
   }
 
-  // Helpers
   IconData _getRiskIcon(String riskLevel) {
     if (riskLevel.contains('EXTREME')) return Icons.emergency;
     if (riskLevel.contains('HIGH')) return Icons.warning;

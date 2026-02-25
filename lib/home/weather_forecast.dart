@@ -1,14 +1,25 @@
 import 'package:flutter/material.dart';
 import '../services/weather_service.dart';
 
+// District → coordinates mapping (matches supported districts)
+const Map<String, Map<String, double>> _districtCoordinates = {
+  'Kota_Bharu_Kelantan':     {'lat': 6.1256, 'lon': 102.2386},
+  'Kota_Tinggi_Johor':       {'lat': 1.7381, 'lon': 103.8999},
+  'Kuantan_Pahang':          {'lat': 3.8077, 'lon': 103.3260},
+  'Pekan_Nanas_Johor':       {'lat': 1.5148, 'lon': 103.5141},
+  'Penang_Island':           {'lat': 5.4141, 'lon': 100.3288},
+  'Rantau_Panjang_Kelantan': {'lat': 6.0196, 'lon': 101.9721},
+  'Segamat_Johor':           {'lat': 2.5148, 'lon': 102.8158},
+  'Serian_Sarawak':          {'lat': 1.1778, 'lon': 110.5733},
+  'Shah_Alam_Selangor':      {'lat': 3.0738, 'lon': 101.5183},
+};
+
 class WeatherForecastCard extends StatefulWidget {
-  final double latitude;
-  final double longitude;
+  final String selectedDistrict;
 
   const WeatherForecastCard({
     super.key,
-    required this.latitude,
-    required this.longitude,
+    required this.selectedDistrict,
   });
 
   @override
@@ -18,14 +29,36 @@ class WeatherForecastCard extends StatefulWidget {
 class _WeatherForecastCardState extends State<WeatherForecastCard> {
   final GoogleWeatherService _weatherService = GoogleWeatherService();
 
+  // Cache the future so it doesn't re-fire on every rebuild
+  late Future<List<WeatherData>> _forecastFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _forecastFuture = _fetchForecast(widget.selectedDistrict);
+  }
+
+  @override
+  void didUpdateWidget(covariant WeatherForecastCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.selectedDistrict != widget.selectedDistrict) {
+      setState(() {
+        _forecastFuture = _fetchForecast(widget.selectedDistrict);
+      });
+    }
+  }
+
+  Future<List<WeatherData>> _fetchForecast(String district) {
+    final coords = _districtCoordinates[district];
+    final lat = coords?['lat'] ?? 5.4141; // fallback: Penang
+    final lon = coords?['lon'] ?? 100.3288;
+    return _weatherService.fetchDailyForecast(lat, lon, days: 7);
+  }
+
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<List<WeatherData>>(
-      future: _weatherService.fetchDailyForecast(
-        widget.latitude,
-        widget.longitude,
-        days: 7,
-      ),
+      future: _forecastFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return _buildLoadingCard();
@@ -36,7 +69,7 @@ class _WeatherForecastCardState extends State<WeatherForecastCard> {
         }
 
         final forecasts = snapshot.data ?? [];
-        
+
         if (forecasts.isEmpty) {
           return _buildErrorCard('No weather data available');
         }
@@ -70,10 +103,7 @@ class _WeatherForecastCardState extends State<WeatherForecastCard> {
             SizedBox(height: 16),
             Text(
               'Loading weather data...',
-              style: TextStyle(
-                color: Color(0xFF6B7280),
-                fontSize: 14,
-              ),
+              style: TextStyle(color: Color(0xFF6B7280), fontSize: 14),
             ),
           ],
         ),
@@ -98,11 +128,7 @@ class _WeatherForecastCardState extends State<WeatherForecastCard> {
       padding: const EdgeInsets.all(20),
       child: const Column(
         children: [
-          Icon(
-            Icons.cloud_off,
-            size: 48,
-            color: Color(0xFF94A3B8),
-          ),
+          Icon(Icons.cloud_off, size: 48, color: Color(0xFF94A3B8)),
           SizedBox(height: 12),
           Text(
             'Weather data unavailable',
@@ -156,9 +182,7 @@ class _WeatherForecastCardState extends State<WeatherForecastCard> {
           const SizedBox(height: 16),
           Center(
             child: TextButton(
-              onPressed: () {
-                _showFullForecast(context, forecasts);
-              },
+              onPressed: () => _showFullForecast(context, forecasts),
               style: TextButton.styleFrom(
                 backgroundColor: const Color(0xFF4285F4).withOpacity(0.1),
                 padding: const EdgeInsets.symmetric(
@@ -212,7 +236,6 @@ class _WeatherForecastCardState extends State<WeatherForecastCard> {
                   fontWeight: FontWeight.w500,
                 ),
               ),
-              // ✅ NEW: Date in muted color
               Text(
                 _formatFullDate(forecast.dateTime),
                 style: TextStyle(
@@ -234,11 +257,7 @@ class _WeatherForecastCardState extends State<WeatherForecastCard> {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(
-                Icons.water_drop_outlined,
-                size: 12,
-                color: Colors.grey[700],
-              ),
+              Icon(Icons.water_drop_outlined, size: 12, color: Colors.grey[700]),
               const SizedBox(width: 2),
               Text(
                 '${forecast.humidity.round()}%',
@@ -252,11 +271,10 @@ class _WeatherForecastCardState extends State<WeatherForecastCard> {
           ),
         ),
         const SizedBox(width: 8),
-        // Precipitation
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
           decoration: BoxDecoration(
-            color: forecast.precipitationMm > 0 
+            color: forecast.precipitationMm > 0
                 ? const Color(0xFF4285F4).withOpacity(0.1)
                 : Colors.grey.withOpacity(0.05),
             borderRadius: BorderRadius.circular(6),
@@ -265,7 +283,7 @@ class _WeatherForecastCardState extends State<WeatherForecastCard> {
             '${forecast.precipitationMm.toStringAsFixed(1)}mm',
             style: TextStyle(
               fontSize: 11,
-              color: forecast.precipitationMm > 0 
+              color: forecast.precipitationMm > 0
                   ? const Color(0xFF4285F4)
                   : Colors.grey[600],
               fontWeight: FontWeight.w500,
@@ -293,35 +311,30 @@ class _WeatherForecastCardState extends State<WeatherForecastCard> {
   }
 
   String _formatFullDate(DateTime date) {
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 
-                   'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+    ];
     return '${months[date.month - 1]} ${date.day}';
   }
 
   Color _getIconColor(IconData icon) {
-    if (icon == Icons.wb_sunny) {
-      return const Color(0xFFFBBF24);
-    } else if (icon == Icons.umbrella || icon == Icons.grain) {
-      return const Color(0xFF4285F4);
-    } else if (icon == Icons.thunderstorm) {
-      return const Color(0xFF6366F1);
-    } else {
-      return const Color(0xFF94A3B8);
-    }
+    if (icon == Icons.wb_sunny) return const Color(0xFFFBBF24);
+    if (icon == Icons.umbrella || icon == Icons.grain) return const Color(0xFF4285F4);
+    if (icon == Icons.thunderstorm) return const Color(0xFF6366F1);
+    return const Color(0xFF94A3B8);
   }
 
   IconData _getIconFromCondition(String condition) {
-    final conditionLower = condition.toLowerCase();
-    if (conditionLower.contains('rain') || conditionLower.contains('shower') || conditionLower.contains('drizzle')) {
+    final c = condition.toLowerCase();
+    if (c.contains('rain') || c.contains('shower') || c.contains('drizzle')) {
       return Icons.umbrella;
-    } else if (conditionLower.contains('thunder') || conditionLower.contains('storm')) {
+    } else if (c.contains('thunder') || c.contains('storm')) {
       return Icons.thunderstorm;
-    } else if (conditionLower.contains('cloud') || conditionLower.contains('overcast')) {
+    } else if (c.contains('cloud') || c.contains('overcast')) {
       return Icons.cloud;
-    } else if (conditionLower.contains('clear') || conditionLower.contains('sun')) {
+    } else if (c.contains('clear') || c.contains('sun')) {
       return Icons.wb_sunny;
-    } else if (conditionLower.contains('partly')) {
-      return Icons.wb_cloudy;
     } else {
       return Icons.wb_cloudy;
     }
@@ -365,8 +378,7 @@ class _WeatherForecastCardState extends State<WeatherForecastCard> {
                 itemCount: forecasts.length,
                 separatorBuilder: (context, index) => const Divider(height: 24),
                 itemBuilder: (context, index) {
-                  final forecast = forecasts[index];
-                  return _buildDetailedForecastRow(forecast);
+                  return _buildDetailedForecastRow(forecasts[index]);
                 },
               ),
             ),
@@ -377,92 +389,79 @@ class _WeatherForecastCardState extends State<WeatherForecastCard> {
   }
 
   Widget _buildDetailedForecastRow(WeatherData forecast) {
-  return Row(
-    children: [
-      Expanded(
-        flex: 2,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Day label and date in the same row
-            Row(
-              children: [
-                Text(
-                  forecast.dayLabel,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF2D3748),
+    return Row(
+      children: [
+        Expanded(
+          flex: 2,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Text(
+                    forecast.dayLabel,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF2D3748),
+                    ),
                   ),
-                ),
-                const SizedBox(width: 8), // spacing between day and date
-                Text(
-                  _formatFullDate(forecast.dateTime),
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey[500],
+                  const SizedBox(width: 8),
+                  Text(
+                    _formatFullDate(forecast.dateTime),
+                    style: TextStyle(fontSize: 12, color: Colors.grey[500]),
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 4), // optional spacing
-            Text(
-              forecast.condition,
-              style: const TextStyle(
-                fontSize: 13,
-                color: Color(0xFF6B7280),
+                ],
               ),
-            ),
-          ],
-        ),
-      ),
-      Expanded(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                Icon(
-                  Icons.water_drop_outlined,
-                  size: 14,
-                  color: Colors.blue[700],
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  '${forecast.humidity.round()}%',
-                  style: const TextStyle(fontSize: 12),
-                ),
-              ],
-            ),
-            Text(
-              '${forecast.precipitationMm.toStringAsFixed(1)}mm',
-              style: TextStyle(
-                fontSize: 12,
-                color: forecast.precipitationMm > 0
-                    ? Colors.blue[700]
-                    : Colors.grey[600],
+              const SizedBox(height: 4),
+              Text(
+                forecast.condition,
+                style: const TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
-      ),
-      const SizedBox(width: 16),
-      Icon(
-        _getIconFromCondition(forecast.condition),
-        size: 32,
-        color: _getIconColor(_getIconFromCondition(forecast.condition)),
-      ),
-      const SizedBox(width: 8),
-      Text(
-        '${forecast.tempMaxC.round()}° / ${forecast.tempMinC.round()}°',
-        style: const TextStyle(
-          fontSize: 20,
-          fontWeight: FontWeight.w600,
-          color: Color(0xFF2D3748),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  Icon(Icons.water_drop_outlined, size: 14, color: Colors.blue[700]),
+                  const SizedBox(width: 4),
+                  Text('${forecast.humidity.round()}%',
+                      style: const TextStyle(fontSize: 12)),
+                ],
+              ),
+              Text(
+                '${forecast.precipitationMm.toStringAsFixed(1)}mm',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: forecast.precipitationMm > 0
+                      ? Colors.blue[700]
+                      : Colors.grey[600],
+                ),
+              ),
+            ],
+          ),
         ),
-      ),
-    ],
-  );
-}
+        const SizedBox(width: 16),
+        Icon(
+          _getIconFromCondition(forecast.condition),
+          size: 32,
+          color: _getIconColor(_getIconFromCondition(forecast.condition)),
+        ),
+        const SizedBox(width: 8),
+        Text(
+          '${forecast.tempMaxC.round()}° / ${forecast.tempMinC.round()}°',
+          style: const TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.w600,
+            color: Color(0xFF2D3748),
+          ),
+        ),
+      ],
+    );
+  }
 }

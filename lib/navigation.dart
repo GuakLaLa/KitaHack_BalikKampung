@@ -6,6 +6,7 @@ import 'package:floodsense/profile/profile_page.dart';
 import 'package:floodsense/report/report_page.dart';
 import 'package:flutter/material.dart';
 import 'package:floodsense/auth/app_user.dart';
+import 'package:floodsense/services/flood_service.dart';
 
 class NavigationPage extends StatefulWidget{
   const NavigationPage({super.key});
@@ -17,6 +18,9 @@ class NavigationPage extends StatefulWidget{
 class _FirstPageState extends State<NavigationPage> {
   //this keep track of the selected index
   int _selectedIndex = 0;
+
+  // Lifted district state — shared between HomePage and MapPage
+  String _selectedDistrict = FloodService.supportedDistricts.first;
 
   final User? user = FirebaseAuth.instance.currentUser;
 
@@ -30,21 +34,18 @@ class _FirstPageState extends State<NavigationPage> {
     });
   }
 
-  //the pages we have in the app
-  final List<Widget> _pages = [
-    //home page
-    HomePage(),
-
-    //map page
-    MapPage(),
-
-    //report page
-    ReportPage(),
-
-    //profile page
-    ProfilePage()
-
-  ];
+  // Use a getter so pages rebuild with updated _selectedDistrict
+  List<Widget> get _pages => [
+        HomePage(
+          selectedDistrict: _selectedDistrict,
+          onDistrictChanged: (district) {
+            setState(() => _selectedDistrict = district);
+          },
+        ),
+        MapPage(selectedDistrict: _selectedDistrict),
+        ReportPage(),
+        ProfilePage(),
+      ];
 
   final List<String> _titles = [
     "Home",
