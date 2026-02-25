@@ -1,3 +1,7 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:floodsense/profile/notifications.dart';
+import 'package:floodsense/services/rainfall_service.dart';
 import 'package:flutter/material.dart';
 import 'package:floodsense/home/flood_prediction.dart';
 import 'package:floodsense/home/flood_forecast.dart';
@@ -8,10 +12,16 @@ import 'package:geolocator/geolocator.dart';
 import 'rainfall_anomaly.dart';
 import 'weather_forecast.dart';
 import 'reminder_checklist.dart';
-import '../services/location_service.dart';
 
 class HomePage extends StatefulWidget {
-  HomePage({super.key});
+  final String selectedDistrict;
+  final ValueChanged<String> onDistrictChanged;
+
+  const HomePage({
+    super.key,
+    required this.selectedDistrict,
+    required this.onDistrictChanged,
+  });
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -20,7 +30,6 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   static const _prefsKey = 'flood_alert_last_shown';
 
-  String? _selectedDistrict;
   FloodPredictionResponse? _floodData;
   bool _isLoading = false;
   String? _errorMessage;
@@ -29,7 +38,11 @@ class _HomePageState extends State<HomePage> {
   double? latitude;
   double? longitude;
   bool isLocationLoading = true;
-
+  
+  // Prevent notification spam
+  String? _lastAnomalyType;
+  String? _lastRiskLevel;
+  
   // District coordinates (lat, lon)
   static const Map<String, List<double>> DISTRICT_COORDS = {
     'Shah_Alam_Selangor': [3.0697, 101.5037],
@@ -48,6 +61,7 @@ class _HomePageState extends State<HomePage> {
     super.initState();
     // Set default district to first one
     _selectedDistrict = FloodService.supportedDistricts.first;
+    _fetchFloodData(widget.selectedDistrict);
     _initAll();
   }
 
@@ -110,6 +124,14 @@ class _HomePageState extends State<HomePage> {
       });
       // Fetch fresh data for the selected nearest district
       await _fetchFloodData(nearest);
+
+
+  @override
+  void didUpdateWidget(covariant HomePage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Refetch when parent changes the district
+    if (oldWidget.selectedDistrict != widget.selectedDistrict) {
+      _fetchFloodData(widget.selectedDistrict);
     }
   }
 
@@ -128,6 +150,7 @@ class _HomePageState extends State<HomePage> {
 
       // Check if we should show the alert dialog
       _maybeShowFloodAlert(data);
+      _checkNotificationConditions(data);
     } catch (e) {
       setState(() {
         _errorMessage = 'Error: ${e.toString()}';
@@ -136,17 +159,69 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  Future<void> _checkNotificationConditions(FloodPredictionResponse data) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    final userDoc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid)
+        .get();
+
+    final prefs = userDoc.data();
+    if (prefs == null) return;
+
+    final bool floodEnabled = prefs['floodAlert'] ?? false;
+    final bool rainfallEnabled = prefs['rainfallAlert'] ?? false;
+
+    // 🚨 Flood Risk Notification
+    if (floodEnabled &&
+        data.riskLevel.toLowerCase() == "high" &&
+        _lastRiskLevel != data.riskLevel) {
+
+      _lastRiskLevel = data.riskLevel;
+
+      await NotificationService.showFloodAlert(data.location);
+    }
+
+    // 🌧 Rainfall Anomaly Notification
+    if (rainfallEnabled) {
+      try {
+        final analysis = await RainfallAnomalyService()
+            .fetchAndAnalyze(widget.selectedDistrict);
+
+        print("Rainfall ratio: ${analysis.ratio}");
+        print("Today rainfall: ${analysis.todayRainfall}");
+        print("Anomaly: ${analysis.anomalyType}");
+
+        if (analysis.ratio > 1.2 &&
+            analysis.anomalyType != _lastAnomalyType) {
+
+          _lastAnomalyType = analysis.anomalyType;
+
+          await NotificationService.showRainfallAlert(
+            location: analysis.locationName,
+            anomalyType: analysis.anomalyType,
+            rainfall: analysis.todayRainfall,
+          );
+        }
+      } catch (e) {
+        print("Rainfall anomaly error: $e");
+      }
+    }
+  }
+
   Future<void> _maybeShowFloodAlert(FloodPredictionResponse data) async {
     final int? daysUntilFlood = data.daysUntilFlood;
 
     if (daysUntilFlood == null) return;
-    if (daysUntilFlood > 3) return; // only show if within 3 days
+    if (daysUntilFlood > 3) return;
 
     final prefs = await SharedPreferences.getInstance();
     final lastShown = prefs.getString(_prefsKey);
     final today = DateTime.now().toIso8601String().split('T').first;
 
-    if (lastShown == today) return; // already shown today
+    if (lastShown == today) return;
 
     // show dialog
     if (!mounted) return;
@@ -162,49 +237,14 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
-    if (isLocationLoading) {
-      return const Scaffold(
-        backgroundColor: Color(0xFFA6E3E9),
-        body: Center(child: CircularProgressIndicator()),
-      );
-    }
-    // Forecasts are now provided by the API via _floodData
-    // The list below is intentionally empty; we'll display the API data when available.
-
     return Scaffold(
       body: SingleChildScrollView(
         child: Column(
           children: [
-             // GPS fallback warning
-              if (LocationService.isUsingFallback())
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  margin: const EdgeInsets.only(bottom: 16),
-                  decoration: BoxDecoration(
-                    color: Colors.orange.shade100,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(Icons.location_off, color: Colors.orange.shade700, size: 18),
-                      const SizedBox(width: 8),
-                      Expanded(child: Text(LocationService.getLocationInfoText())),
-                      IconButton(
-                        icon: const Icon(Icons.refresh, size: 18),
-                        onPressed: () {
-                          LocationService.clearCache();
-                          setState(() => isLocationLoading = true);
-                          _getUserLocation();
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-
             // District Dropdown Selector
             Container(
-              margin: EdgeInsets.symmetric(horizontal: 16, vertical: 20),
-              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(12),
@@ -212,15 +252,15 @@ class _HomePageState extends State<HomePage> {
                   BoxShadow(
                     color: Colors.black.withOpacity(0.1),
                     blurRadius: 5,
-                    offset: Offset(0, 2),
+                    offset: const Offset(0, 2),
                   ),
                 ],
               ),
               child: DropdownButton<String>(
-                value: _selectedDistrict,
+                value: widget.selectedDistrict,
                 isExpanded: true,
-                underline: SizedBox.shrink(),
-                hint: Text('Select a district'),
+                underline: const SizedBox.shrink(),
+                hint: const Text('Select a district'),
                 items: FloodService.supportedDistricts.map((district) {
                   return DropdownMenuItem<String>(
                     value: district,
@@ -229,9 +269,7 @@ class _HomePageState extends State<HomePage> {
                 }).toList(),
                 onChanged: (String? newValue) {
                   if (newValue != null) {
-                    setState(() {
-                      _selectedDistrict = newValue;
-                    });
+                    widget.onDistrictChanged(newValue); // notify NavigationPage
                     _fetchFloodData(newValue);
                   }
                 },
@@ -241,8 +279,8 @@ class _HomePageState extends State<HomePage> {
             // Error Message Display
             if (_errorMessage != null) ...[
               Container(
-                margin: EdgeInsets.symmetric(horizontal: 16),
-                padding: EdgeInsets.all(12),
+                margin: const EdgeInsets.symmetric(horizontal: 16),
+                padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
                   color: Colors.red.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(8),
@@ -250,23 +288,23 @@ class _HomePageState extends State<HomePage> {
                 ),
                 child: Row(
                   children: [
-                    Icon(Icons.error_outline, color: Colors.red),
-                    SizedBox(width: 12),
+                    const Icon(Icons.error_outline, color: Colors.red),
+                    const SizedBox(width: 12),
                     Expanded(
                       child: Text(
                         _errorMessage!,
-                        style: TextStyle(color: Colors.red),
+                        style: const TextStyle(color: Colors.red),
                       ),
                     ),
                   ],
                 ),
               ),
-              SizedBox(height: 16),
+              const SizedBox(height: 16),
             ],
 
             // Loading Indicator or Flood Prediction Card
             if (_isLoading)
-              Padding(
+              const Padding(
                 padding: EdgeInsets.symmetric(vertical: 40),
                 child: Column(
                   children: [
@@ -292,7 +330,7 @@ class _HomePageState extends State<HomePage> {
                   location: _floodData!.location,
                   riskLevel: _floodData!.riskLevel,
                   waterDepth: _floodData!.predictedArea,
-                  weather: _floodData!.currentWeather, // real-time weather from API
+                  weather: _floodData!.currentWeather,
                   date: DateTime.now().toString().split(' ')[0],
                   floodReminder: _floodData!.floodReminder,
                   daysUntilFlood: _floodData!.daysUntilFlood,
@@ -300,28 +338,25 @@ class _HomePageState extends State<HomePage> {
               ),
 
             // 3-Day Flood Forecast (from API)
-            if (_floodData != null) FloodForecastList(forecasts: _floodData!.forecast),
+            if (_floodData != null)
+              FloodForecastList(forecasts: _floodData!.forecast),
 
-            // Rainfall Anomaly Detection
-              RainfallAnomalyCard(
-                latitude: latitude!,
-                longitude: longitude!,
-              ),
+            // Rainfall Anomaly Detection — uses district for consistent location
+            RainfallAnomalyCard(
+              selectedDistrict: widget.selectedDistrict,
+            ),
 
-              // 7-Day Weather Forecast
-              WeatherForecastCard(
-                latitude: latitude!,
-                longitude: longitude!,
-              ),
+            // 7-Day Weather Forecast — uses district for consistent location
+            WeatherForecastCard(
+              selectedDistrict: widget.selectedDistrict,
+            ),
 
-              // Reminder Checklist
-              const ReminderChecklistCard(),
+            // Reminder Checklist
+            const ReminderChecklistCard(),
           ],
-
-          
         ),
       ),
-      backgroundColor: Color(0xFFA6E3E9),
+      backgroundColor: const Color(0xFFA6E3E9),
     );
   }
 }

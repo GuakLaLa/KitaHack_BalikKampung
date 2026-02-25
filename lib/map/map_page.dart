@@ -11,7 +11,9 @@ import 'marker.dart';
 final FirebaseFirestore firestore = FirebaseFirestore.instance;
 
 class MapPage extends StatefulWidget {
-  const MapPage({super.key});
+  final String selectedDistrict;
+
+  const MapPage({super.key, required this.selectedDistrict});
 
   @override
   State<MapPage> createState() => _MapPageState();
@@ -94,7 +96,7 @@ class _MapPageState extends State<MapPage> {
     }
   }
 
-  // ---------------- clustering ----------------
+  // ---------------- Clustering ----------------
   void _listenFloodReports() {
     _floodSubscription =
         firestore.collection('floodreports').snapshots().listen((
@@ -105,6 +107,7 @@ class _MapPageState extends State<MapPage> {
             snapshot.docs,
             _currentPosition!,
             context: context,
+            selectedDistrict: widget.selectedDistrict,
             onUpdateMarkers: (newMarkers) {
               if (!mounted) return;
               setState(() {

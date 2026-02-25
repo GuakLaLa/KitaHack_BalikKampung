@@ -6,6 +6,8 @@ import 'package:floodsense/profile/profile_page.dart';
 import 'package:floodsense/report/report_page.dart';
 import 'package:flutter/material.dart';
 import 'package:floodsense/auth/app_user.dart';
+import 'package:floodsense/services/flood_service.dart';
+import 'package:floodsense/auth/login_page.dart';
 
 class NavigationPage extends StatefulWidget{
   const NavigationPage({super.key});
@@ -17,6 +19,9 @@ class NavigationPage extends StatefulWidget{
 class _FirstPageState extends State<NavigationPage> {
   //this keep track of the selected index
   int _selectedIndex = 0;
+
+  // Lifted district state — shared between HomePage and MapPage
+  String _selectedDistrict = FloodService.supportedDistricts.first;
 
   final User? user = FirebaseAuth.instance.currentUser;
 
@@ -30,21 +35,18 @@ class _FirstPageState extends State<NavigationPage> {
     });
   }
 
-  //the pages we have in the app
-  final List<Widget> _pages = [
-    //home page
-    HomePage(),
-
-    //map page
-    MapPage(),
-
-    //report page
-    ReportPage(),
-
-    //profile page
-    ProfilePage()
-
-  ];
+  // Use a getter so pages rebuild with updated _selectedDistrict
+  List<Widget> get _pages => [
+        HomePage(
+          selectedDistrict: _selectedDistrict,
+          onDistrictChanged: (district) {
+            setState(() => _selectedDistrict = district);
+          },
+        ),
+        MapPage(selectedDistrict: _selectedDistrict),
+        ReportPage(),
+        ProfilePage(),
+      ];
 
   final List<String> _titles = [
     "Home",
@@ -97,11 +99,7 @@ class _FirstPageState extends State<NavigationPage> {
   // ================= DRAWER =================
 
   Widget _buildDrawer() {
-    if (user == null) {
-      return Drawer(
-        child: SafeArea(child: _buildGuestDrawer()),
-      );
-    }
+    final user = FirebaseAuth.instance.currentUser; //NOT stored in state
 
     return Drawer(
       child: SafeArea(
@@ -113,10 +111,6 @@ class _FirstPageState extends State<NavigationPage> {
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
               return const Center(child: CircularProgressIndicator());
-            }
-
-            if (!snapshot.hasData || !snapshot.data!.exists) {
-              return _buildGuestDrawer();
             }
 
             final data =
@@ -171,8 +165,92 @@ class _FirstPageState extends State<NavigationPage> {
                   leading: const Icon(Icons.logout),
                   title: const Text("Logout"),
                   onTap: () async {
-                    Navigator.pop(context);
-                    await FirebaseAuth.instance.signOut();
+                    Navigator.pop(context); // close drawer
+
+                    final shouldLogout = await showDialog<bool>(
+                      context: context,
+                      barrierDismissible: false,
+                      builder: (context) {
+                        return Dialog(
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.all(24),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+
+                                const Icon(
+                                  Icons.logout,
+                                  size: 60,
+                                  color: Color(0xFF44DBE9),
+                                ),
+
+                                const SizedBox(height: 16),
+
+                                const Text(
+                                  "Logout",
+                                  style: TextStyle(
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+
+                                const SizedBox(height: 10),
+
+                                const Text(
+                                  "Are you sure you want to logout?",
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(fontSize: 15),
+                                ),
+
+                                const SizedBox(height: 24),
+
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: OutlinedButton(
+                                        onPressed: () {
+                                          Navigator.pop(context, false);
+                                        },
+                                        child: const Text("Cancel"),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: ElevatedButton(
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: const Color(0xFF44DBE9),
+                                        ),
+                                        onPressed: () {
+                                          Navigator.pop(context, true);
+                                        },
+                                        child: const Text("Logout"),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    );
+
+                    if (shouldLogout == true) {
+                      await FirebaseAuth.instance.signOut();
+
+                      if (context.mounted) {
+                        Navigator.pushAndRemoveUntil(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => LoginPage(),
+                          ),
+                          (route) => false,
+                        );
+                      }
+                    }
                   },
                 ),
               ],
@@ -207,27 +285,6 @@ class _FirstPageState extends State<NavigationPage> {
           _selectedIndex = index;
         });
       },
-    );
-  }
-
-
-  // ================= GUEST DRAWER =================
-
-  Widget _buildGuestDrawer() {
-    return Column(
-      children: const [
-        UserAccountsDrawerHeader(
-          decoration: BoxDecoration(
-            color: Color(0xFFA6E3E9),
-          ),
-          accountName: Text("Guest User"),
-          accountEmail: Text("Not logged in"),
-          currentAccountPicture: CircleAvatar(
-            backgroundColor: Colors.white,
-            child: Icon(Icons.person, size: 35),
-          ),
-        ),
-      ],
     );
   }
 }

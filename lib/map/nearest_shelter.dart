@@ -72,7 +72,7 @@ class _ShelterPageState extends State<ShelterPage>
     return all.where((d) => d.state == _stateFilter).toList();
   }
 
-  // ✅ State names for filter chips — from sidebar (clean state names)
+  // State names for filter chips — from sidebar (clean state names)
   // Falls back to district states if sidebar parse failed
   List<String> get _activeStateNames {
     final r = _activeResult;
@@ -501,7 +501,6 @@ class _ShelterPageState extends State<ShelterPage>
   );
 
   // ── State filter bar — white unselected, light grey selected ──
-  // ✅ Shows STATE names (Sabah, Johor…) not district names
 
   Widget _stateFilterBar(InfoBencanaResult r) {
     final stateNames = _activeStateNames; // ← from sidebar StateEntry list
@@ -631,7 +630,7 @@ class _ShelterPageState extends State<ShelterPage>
                   d.estimatedCapacity > 0 ? '~${d.estimatedCapacity}' : 'N/A',
                   'Capacity'),
               const Spacer(),
-              // ✅ Direction → straight to Maps, no sheet
+              // Direction → straight to Maps
               IconButton(
                 onPressed: () {
                   final p = named.isNotEmpty ? named.first : null;
@@ -880,5 +879,8 @@ class _ShelterPageState extends State<ShelterPage>
           textAlign: TextAlign.center),
     ])));
 
-  String _fmt(int n) => n >= 1000 ? '${(n / 1000).toStringAsFixed(1)}k' : n.toString();
+  String _fmt(int n) => n.toString().replaceAllMapped(
+  RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
+  (m) => '${m[1]},',
+);
 }
