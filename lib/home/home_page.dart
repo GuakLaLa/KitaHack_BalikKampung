@@ -39,8 +39,8 @@ class _HomePageState extends State<HomePage> {
   bool isLocationLoading = true;
 
   // Prevent notification spam
+  String? _lastAnomalyType;
   String? _lastRiskLevel;
-  String? _lastWeather;
   
   @override
   void initState() {
@@ -81,45 +81,57 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-Future<void> _checkNotificationConditions(FloodPredictionResponse data) async {
-  final user = FirebaseAuth.instance.currentUser;
-  if (user == null) return;
+  Future<void> _checkNotificationConditions(FloodPredictionResponse data) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
 
-  final userDoc = await FirebaseFirestore.instance
-      .collection('users')
-      .doc(user.uid)
-      .get();
+    final userDoc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid)
+        .get();
 
-  final prefs = userDoc.data();
-  if (prefs == null) return;
+    final prefs = userDoc.data();
+    if (prefs == null) return;
 
-  final bool floodEnabled = prefs['floodAlert'] ?? false;
-  final bool rainfallEnabled = prefs['rainfallAlert'] ?? false;
+    final bool floodEnabled = prefs['floodAlert'] ?? false;
+    final bool rainfallEnabled = prefs['rainfallAlert'] ?? false;
 
-  // 🚨 High flood risk
-  if (floodEnabled && data.riskLevel.toLowerCase() == "high") {
-    await NotificationService.showFloodAlert(data.location);
-  }
+    // 🚨 Flood Risk Notification
+    if (floodEnabled &&
+        data.riskLevel.toLowerCase() == "high" &&
+        _lastRiskLevel != data.riskLevel) {
 
-  // 🌧 Rainfall Anomaly
-  if (rainfallEnabled && latitude != null && longitude != null) {
-    try {
-      final analysis = await RainfallAnomalyService()
-          .fetchAndAnalyze(latitude!, longitude!, days: 8);
+      _lastRiskLevel = data.riskLevel;
 
-      // Only notify if anomaly ratio is above normal
-      if (analysis.ratio > 1.2) {
-        await NotificationService.showRainfallAlert(
-          location: analysis.locationName ?? "Unknown",
-          anomalyType: analysis.anomalyType,
-          rainfall: analysis.todayRainfall,
-        );
+      await NotificationService.showFloodAlert(data.location);
+    }
+
+    // 🌧 Rainfall Anomaly Notification
+    if (rainfallEnabled) {
+      try {
+        final analysis = await RainfallAnomalyService()
+            .fetchAndAnalyze(widget.selectedDistrict);
+
+        print("Rainfall ratio: ${analysis.ratio}");
+        print("Today rainfall: ${analysis.todayRainfall}");
+        print("Anomaly: ${analysis.anomalyType}");
+
+        if (analysis.ratio > 1.2 &&
+            analysis.anomalyType != _lastAnomalyType) {
+
+          _lastAnomalyType = analysis.anomalyType;
+
+          await NotificationService.showRainfallAlert(
+            location: analysis.locationName,
+            anomalyType: analysis.anomalyType,
+            rainfall: analysis.todayRainfall,
+          );
+        }
+      } catch (e) {
+        print("Rainfall anomaly error: $e");
       }
-    } catch (e) {
-      print("Failed to fetch rainfall anomaly: $e");
     }
   }
-}
 
   Future<void> _maybeShowFloodAlert(FloodPredictionResponse data) async {
     final int? daysUntilFlood = data.daysUntilFlood;
