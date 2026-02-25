@@ -4,19 +4,30 @@ class MyTextField extends StatelessWidget {
   final TextEditingController controller;
   final String labelText;
   final bool obscureText;
+  final String? errorText;
+  final String? Function(String?)? validator;
+  final FocusNode? focusNode;
+  final GlobalKey<FormFieldState>? fieldKey;
 
   const MyTextField({
     super.key,
     required this.controller,
     required this.labelText,
-    this.obscureText = false,
+    required this.obscureText,
+    this.errorText,
+    this.validator,
+    this.focusNode,
+    this.fieldKey,
   });
 
   @override
   Widget build(BuildContext context) {
-    return TextField(
+    return TextFormField(
+      key: fieldKey,
       controller: controller,
+      focusNode: focusNode,
       obscureText: obscureText,
+      validator: validator,
       decoration: InputDecoration(
         //border when unseleected
         enabledBorder: OutlineInputBorder(
@@ -31,6 +42,20 @@ class MyTextField extends StatelessWidget {
         focusedBorder: OutlineInputBorder(
           borderSide: const BorderSide(
             color: Colors.blue,
+            width: 2.0,
+          ),
+          borderRadius: BorderRadius.circular(8.0),
+        ),
+        errorBorder: OutlineInputBorder(
+          borderSide: const BorderSide(
+            color: Colors.red,
+            width: 1.5,
+          ),
+          borderRadius: BorderRadius.circular(8.0),
+        ),
+        focusedErrorBorder: OutlineInputBorder(
+          borderSide: const BorderSide(
+            color: Colors.red,
             width: 2.0,
           ),
           borderRadius: BorderRadius.circular(8.0),
