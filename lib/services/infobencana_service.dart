@@ -9,7 +9,7 @@ class ActivePPS {
   final String district;
   final String mukim;
   final String disasterType;
-  final int kapasiti;        // occupancy % (0-100)
+  final int kapasiti;
   final int mangsa;
   final int keluarga;
   final double? lat;
@@ -59,6 +59,7 @@ class ActivePPS {
 
   Color get statusColor {
     final r = kapasiti > 0 ? kapasiti / 100.0 : occupancyRate;
+    if (r > 1.0) return const Color(0xFF6A0DAD); // added purple for overcapacity (>100%)
     if (r >= 0.8) return const Color(0xFFB71C1C);
     if (r >= 0.4) return const Color(0xFFFFD600);
     return const Color(0xFF1B5E20);
@@ -66,6 +67,7 @@ class ActivePPS {
 
   String get statusLabel {
     final r = kapasiti > 0 ? kapasiti / 100.0 : occupancyRate;
+    if (r > 1.0) return 'OVERCAPACITY';
     if (r >= 0.8) return 'NEARLY FULL';
     if (r >= 0.4) return 'MODERATE';
     return 'AVAILABLE';
@@ -99,12 +101,14 @@ class DisasterDistrict {
   });
 
   Color get statusColor {
+    if (kapasiti > 100) return const Color(0xFF6A0DAD);
     if (kapasiti >= 80) return const Color(0xFFB71C1C);
     if (kapasiti >= 40) return const Color(0xFFFFD600);
     return const Color(0xFF1B5E20);
   }
 
   String get statusLabel {
+    if (kapasiti > 100) return 'OVERCAPACITY';
     if (kapasiti >= 80) return 'NEARLY FULL';
     if (kapasiti >= 40) return 'MODERATE';
     return 'AVAILABLE';
@@ -250,9 +254,6 @@ class InfoBencanaService {
     final seasonId = _extractSeasonId(html);
     final ppsList = await _fetchPPSList(seasonId, base.districts, base.states);
 
-    // print('${base.totalPPS} PPS, ${base.totalMangsa} evacuees, '
-    //     '${ppsList.length} named');
-
     return InfoBencanaResult(
       totalPPS:      base.totalPPS,
       totalNegeri:   base.totalNegeri,
@@ -275,12 +276,16 @@ class InfoBencanaService {
       RegExp(r"""seasonmain_id[=:\s'"]+(\d+)""", caseSensitive: false),
     ]) {
       final m = re.firstMatch(html);
-      if (m != null) return m.group(1);
+      if (m != null) {
+        print('Found seasonmain_id: ${m.group(1)}');
+        return m.group(1);
+      }
     }
+    print('seasonmain_id NOT found');
     return null;
   }
 
-  // Fetch PPS list: endpoint is found from F12-network-fetch/XHR
+  // Fetch PPS list
   Future<List<ActivePPS>> _fetchPPSList(
     String? seasonId,
     List<DisasterDistrict> districts,
@@ -292,9 +297,7 @@ class InfoBencanaService {
     }
 
     final urls = [
-      // CORRECT endpoint
       '$_base/api/data-dashboard-table-pps.php?a=0&b=0&seasonmain_id=$seasonId&seasonnegeri_id=',
-      // Backups
       '$_base/data-api-info-bencana-negeri.php?data=0&negeri=0',
     ];
 
@@ -312,7 +315,6 @@ class InfoBencanaService {
         }
 
         dynamic parsed = jsonDecode(body);
-        // API returns {"ppsbuka": [...]} 
         final List raw = parsed is List ? parsed
             : (parsed['ppsbuka'] ?? parsed['data'] ?? parsed['pps'] ?? []) as List;
 
@@ -322,61 +324,59 @@ class InfoBencanaService {
         }
 
         print('${raw.length} rows');
-        if (raw.isNotEmpty) {
-          print('Keys: ${(raw[0] as Map).keys.take(10).toList()}');
-        }
+        print('Keys: ${(raw[0] as Map).keys.toList()}');
 
         final result = raw.map<ActivePPS>((r) {
-          final name     = _s(r, ['nama','nama_pps']) ?? 'Unknown';
+          final name     = _s(r, ['nama', 'nama_pps']) ?? 'Unknown';
           final stateRaw = _s(r, ['negeri']) ?? '';
           final district = _s(r, ['daerah']) ?? '';
           final mukim    = _s(r, ['mukim']) ?? '';
-          final buka     = _s(r, ['buka','tarikh_buka']);
-          
-          // API returns kapasiti as "64.8%" string, parse it
-          final kapStr   = _s(r, ['kapasiti']) ?? '0%';
-          final kap      = double.tryParse(kapStr.replaceAll('%', ''))?.round() ?? 0;
-          
+          final buka     = _s(r, ['buka', 'tarikh_buka']);
+
+          // API returns kapasitiDouble (raw double) or kapasiti ("64.8%")
+          final kapDouble = _d(r, ['kapasitiDouble']);
+          final kapStr    = _s(r, ['kapasiti']) ?? '0';
+          final kap = kapDouble != null
+              ? kapDouble.round()
+              : (double.tryParse(kapStr.replaceAll('%', ''))?.round() ?? 0);
+
           final mangsa   = _i(r, ['mangsa']) ?? 0;
           final keluarga = _i(r, ['keluarga']) ?? 0;
-          final lat      = _d(r, ['lat','latitude']);
-          final lng      = _d(r, ['lng','longitude']);
+          final lat      = _d(r, ['lat', 'latitude']);
+          final lng      = _d(r, ['lng', 'longitude']);
 
-          // Demographics
-          final lelakiDewasa     = _i(r, ['lelaki_dewasa']) ?? 0;
-          final perempuanDewasa  = _i(r, ['perempuan_dewasa']) ?? 0;
-          final kanakLelaki      = _i(r, ['kanak_lelaki']) ?? 0;
-          final kanakPerempuan   = _i(r, ['kanak_perempuan']) ?? 0;
-          final bayiLelaki       = _i(r, ['bayi_lelaki']) ?? 0;
-          final bayiPerempuan    = _i(r, ['bayi_perempuan']) ?? 0;
+          final lelakiDewasa    = _i(r, ['lelaki_dewasa']) ?? 0;
+          final perempuanDewasa = _i(r, ['perempuan_dewasa']) ?? 0;
+          final kanakLelaki     = _i(r, ['kanak_lelaki']) ?? 0;
+          final kanakPerempuan  = _i(r, ['kanak_perempuan']) ?? 0;
+          final bayiLelaki      = _i(r, ['bayi_lelaki']) ?? 0;
+          final bayiPerempuan   = _i(r, ['bayi_perempuan']) ?? 0;
 
-          // Opened date: API returns "09 Feb" or "12 Feb" format
           final openedDate = _parseBukaDate(buka);
-          
-          // Infer disaster type from API data or match with district
+
           final matchingDistrict = districts.where(
               (d) => d.district == district && d.state == _translateState(stateRaw)
           ).firstOrNull;
           final disaster = matchingDistrict?.disasterType ?? 'Flood';
 
           return ActivePPS(
-            name:         name,
-            state:        _translateState(stateRaw),
-            district:     district,
-            mukim:        mukim,
-            disasterType: disaster,
-            kapasiti:     kap,
-            mangsa:       mangsa,
-            keluarga:     keluarga,
-            lat:          lat,
-            lng:          lng,
-            openedDate:   openedDate,
-            lelakiDewasa: lelakiDewasa,
+            name:            name,
+            state:           _translateState(stateRaw),
+            district:        district,
+            mukim:           mukim,
+            disasterType:    disaster,
+            kapasiti:        kap,
+            mangsa:          mangsa,
+            keluarga:        keluarga,
+            lat:             lat,
+            lng:             lng,
+            openedDate:      openedDate,
+            lelakiDewasa:    lelakiDewasa,
             perempuanDewasa: perempuanDewasa,
-            kanakLelaki: kanakLelaki,
-            kanakPerempuan: kanakPerempuan,
-            bayiLelaki: bayiLelaki,
-            bayiPerempuan: bayiPerempuan,
+            kanakLelaki:     kanakLelaki,
+            kanakPerempuan:  kanakPerempuan,
+            bayiLelaki:      bayiLelaki,
+            bayiPerempuan:   bayiPerempuan,
           );
         }).toList();
 
@@ -418,9 +418,19 @@ class InfoBencanaService {
     try {
       final updatedTime = _parseUpdatedTime(html);
       final stats       = _parseSummaryStats(html);
-      if (stats.length < 4) return null;
+      print('DEBUG stats: $stats');
+
+      if (stats.length < 4) {
+        print('DEBUG stats too short: ${stats.length}');
+        return null;
+      }
+
       final states    = _parseStateSidebar(html);
+      print('DEBUG states count: ${states.length}');
+
       final districts = _parseDistrictTable(html, states);
+      print('DEBUG districts count: ${districts.length}');
+
       return InfoBencanaResult(
         totalPPS:      stats[0], totalNegeri: stats[1],
         totalKeluarga: stats[2], totalMangsa: stats[3],
@@ -429,7 +439,10 @@ class InfoBencanaService {
         lastUpdated:   updatedTime,
         isLiveData:    true, filteredState: filterState,
       );
-    } catch (e) { print('$e'); return null; }
+    } catch (e) {
+      print('DEBUG _parseHtml error: $e');
+      return null;
+    }
   }
 
   DateTime _parseUpdatedTime(String html) {
@@ -449,24 +462,31 @@ class InfoBencanaService {
     return DateTime(yr, mon, day, hr, min);
   }
 
+  // Fix: allow commas in numbers (e.g. 2,165)
   List<int> _parseSummaryStats(String html) {
     final s = html.indexOf('audience-chart-header');
     final e = html.indexOf('statBukaTab', s);
-    if (s == -1 || e == -1) return [];
+    if (s == -1 || e == -1) {
+      print('Stats block not found: s=$s, e=$e');
+      return [];
+    }
     final block = html.substring(s, e);
-    final re = RegExp(r'<h5[^>]*class="text-black[^"]*"[^>]*>(\d+)</h5>');
-    return re.allMatches(block).map((m) => int.parse(m.group(1)!)).toList();
+    final re = RegExp(r'<h5[^>]*class="text-black[^"]*"[^>]*>([\d,]+)</h5>');
+    return re.allMatches(block)
+        .map((m) => int.parse(m.group(1)!.replaceAll(',', '')))
+        .toList();
   }
 
+  // Fix: allow commas in span numbers (e.g. 1,927)
   List<StateEntry> _parseStateSidebar(String html) {
-    final start     = html.indexOf('id="listBukaMap"');
+    final start = html.indexOf('id="listBukaMap"');
     if (start == -1) return [];
     final bodyStart = html.indexOf('card-body', start);
     if (bodyStart == -1) return [];
-    final bodyEnd   = html.indexOf('col-lg-3 col-xl-3', bodyStart + 100);
-    final block     = bodyEnd > bodyStart
+    final bodyEnd = html.indexOf('col-lg-3 col-xl-3', bodyStart + 100);
+    final block = bodyEnd > bodyStart
         ? html.substring(bodyStart, bodyEnd)
-        : html.substring(bodyStart, bodyStart + 8000);
+        : html.substring(bodyStart, bodyStart + 20000); // increased from 8000
 
     final result = <StateEntry>[];
     for (final entry in block.split('btn-reveal-trigger').skip(1)) {
@@ -481,9 +501,16 @@ class InfoBencanaService {
         final date = dateMatch != null
             ? (_parseDate(dateMatch.group(1)) ?? DateTime.now()) : DateTime.now();
 
-        final spans = RegExp(r'<span[^>]*class="fs-0"[^>]*>(\d+)</span>')
-            .allMatches(entry).map((m) => int.parse(m.group(1)!)).toList();
-        if (spans.length < 4) continue;
+        // Fix: [\d,]+ instead of \d+ to handle thousands like 1,927
+        final spans = RegExp(r'<span[^>]*class="fs-0"[^>]*>([\d,]+)</span>')
+            .allMatches(entry)
+            .map((m) => int.parse(m.group(1)!.replaceAll(',', '')))
+            .toList();
+
+        if (spans.length < 4) {
+          print('DEBUG: skipping $state — only ${spans.length} spans: $spans');
+          continue;
+        }
 
         result.add(StateEntry(
           state: state, openedDate: date,
@@ -495,6 +522,7 @@ class InfoBencanaService {
     return result;
   }
 
+  // Fix: allow commas in district table numbers
   List<DisasterDistrict> _parseDistrictTable(String html, List<StateEntry> states) {
     final tbodyStart = html.indexOf('table-group-divider');
     final tbodyEnd   = html.indexOf('</tbody>', tbodyStart);
@@ -504,8 +532,8 @@ class InfoBencanaService {
 
     for (final row in tbody.split('<tr class="border-bottom border-200">').skip(1)) {
       try {
-        final h6re  = RegExp(r'<h6 class="mb-0 ps-2">(.*?)</h6>', dotAll: true);
-        final h6s   = h6re.allMatches(row)
+        final h6re = RegExp(r'<h6 class="mb-0 ps-2">(.*?)</h6>', dotAll: true);
+        final h6s  = h6re.allMatches(row)
             .map((m) => _stripTags(m.group(1)!))
             .where((t) => t.isNotEmpty)
             .toList();
@@ -515,9 +543,10 @@ class InfoBencanaService {
         final state    = h6s.length > 1 ? _translateState(h6s[1]) : '';
         final district = h6s.length > 2 ? h6s[2] : '';
 
-        final h5re  = RegExp(r'<h5 class="mb-0 ps-2">(\d+)</h5>');
-        final nums  = h5re.allMatches(row)
-            .map((m) => int.parse(m.group(1)!)).toList();
+        // Fix: [\d,]+ to handle comma-formatted numbers
+        final h5re = RegExp(r'<h5 class="mb-0 ps-2">([\d,]+)</h5>');
+        final nums = h5re.allMatches(row)
+            .map((m) => int.parse(m.group(1)!.replaceAll(',', ''))).toList();
         if (nums.length < 3) continue;
 
         final kapMatch = RegExp(r'([\d.]+)%</h5>').firstMatch(row);
@@ -593,12 +622,11 @@ class InfoBencanaService {
   DateTime _parseBukaDate(String? v) {
     if (v == null || v.isEmpty) return DateTime.now();
     try {
-      // Format: "09 Feb" or "12 Feb"
       final parts = v.trim().split(' ');
       if (parts.length >= 2) {
-        final day = int.parse(parts[0]);
-        final mon = _monthToInt(parts[1]);
-        final year = DateTime.now().year; // Current year
+        final day  = int.parse(parts[0]);
+        final mon  = _monthToInt(parts[1]);
+        final year = DateTime.now().year;
         return DateTime(year, mon, day);
       }
     } catch (_) {}
@@ -606,8 +634,10 @@ class InfoBencanaService {
   }
 
   int _monthToInt(String m) {
-    const months = {'jan':1,'feb':2,'mar':3,'apr':4,'may':5,'jun':6,
-        'jul':7,'aug':8,'sep':9,'oct':10,'nov':11,'dec':12};
+    const months = {
+      'jan':1,'feb':2,'mar':3,'apr':4,'may':5,'jun':6,
+      'jul':7,'aug':8,'sep':9,'oct':10,'nov':11,'dec':12
+    };
     return months[m.toLowerCase().substring(0, 3)] ?? 1;
   }
 
@@ -625,9 +655,10 @@ class InfoBencanaService {
 
   String _translateDisaster(String s) {
     final l = s.toLowerCase();
-    if (l.contains('banjir'))                         return 'Flood';
-    if (l.contains('kebakaran'))                      return 'Fire';
-    if (l.contains('tanah') || l.contains('runtuh'))  return 'Landslide';
+    if (l.contains('banjir'))                        return 'Flood';
+    if (l.contains('ribut') || l.contains('taufan')) return 'Storm';
+    if (l.contains('kebakaran'))                     return 'Fire';
+    if (l.contains('tanah') || l.contains('runtuh')) return 'Landslide';
     return s.isEmpty ? 'Disaster' : s;
   }
 
