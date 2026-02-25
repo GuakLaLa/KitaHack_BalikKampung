@@ -4,6 +4,7 @@ import 'package:floodsense/home/flood_forecast.dart';
 import 'package:floodsense/home/flood_timer.dart';
 import 'package:floodsense/services/flood_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:geolocator/geolocator.dart';
 import 'rainfall_anomaly.dart';
 import 'weather_forecast.dart';
 import 'reminder_checklist.dart';
@@ -29,6 +30,19 @@ class _HomePageState extends State<HomePage> {
   double? longitude;
   bool isLocationLoading = true;
 
+  // District coordinates (lat, lon)
+  static const Map<String, List<double>> DISTRICT_COORDS = {
+    'Shah_Alam_Selangor': [3.0697, 101.5037],
+    'Kota_Bharu_Kelantan': [6.1254, 102.2386],
+    'Segamat_Johor': [2.5065, 102.8158],
+    'Kuantan_Pahang': [3.8077, 103.3260],
+    'Pekan_Nanas_Johor': [1.5086, 103.5097],
+    'Penang_Island': [5.3496, 100.2525],
+    'Rantau_Panjang_Kelantan': [6.0210, 102.0837],
+    'Serian_Sarawak': [1.1693, 110.5689],
+    'Kota_Tinggi_Johor': [1.7381, 103.8999],
+  };
+
   @override
   void initState() {
     super.initState();
@@ -38,20 +52,25 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _initAll() async {
-    await _getUserLocation();
-    await _fetchFloodData(_selectedDistrict!);// Fetch initial data
+    final pos = await _getUserLocation();
+    if (pos != null) {
+      await _findNearestDistrict(pos);
+    }
+    await _fetchFloodData(_selectedDistrict!); // Fetch initial data
   }
 
   // Get user's location lat long
-  Future<void> _getUserLocation() async {
+  Future<Position?> _getUserLocation() async {
     try {
       final position = await LocationService.getCurrentLocation();
-      
+
       setState(() {
         latitude = position.latitude;
         longitude = position.longitude;
         isLocationLoading = false;
       });
+
+      return position;
     } catch (e) {
       print('Error getting location: $e');
       setState(() {
@@ -59,6 +78,38 @@ class _HomePageState extends State<HomePage> {
         longitude = LocationService.fallbackLongitude;
         isLocationLoading = false;
       });
+      return null;
+    }
+  }
+
+  /// Finds the nearest district from the given [userPos] and updates selection.
+  Future<void> _findNearestDistrict(Position userPos) async {
+    String? nearest;
+    double minDist = double.infinity;
+
+    for (final district in FloodService.supportedDistricts) {
+      final coords = DISTRICT_COORDS[district];
+      if (coords == null || coords.length < 2) continue;
+      final lat = coords[0];
+      final lon = coords[1];
+      final distKm = LocationService.calculateDistance(
+        userPos.latitude,
+        userPos.longitude,
+        lat,
+        lon,
+      );
+      if (distKm < minDist) {
+        minDist = distKm;
+        nearest = district;
+      }
+    }
+
+    if (nearest != null) {
+      setState(() {
+        _selectedDistrict = nearest;
+      });
+      // Fetch fresh data for the selected nearest district
+      await _fetchFloodData(nearest);
     }
   }
 
