@@ -23,8 +23,6 @@ class _EditProfilePageState extends State<EditProfilePage> {
 
   final TextEditingController nameController = TextEditingController();
   final TextEditingController phoneController = TextEditingController();
-  final TextEditingController locationController = TextEditingController();
-  final TextEditingController passwordController = TextEditingController();
 
   String gender = "Male";
   bool isLoading = true;
@@ -47,8 +45,10 @@ class _EditProfilePageState extends State<EditProfilePage> {
 
     nameController.text = data['name'] ?? "";
     phoneController.text = data['phoneNumber'] ?? "";
-    locationController.text = data['location'] ?? "";
     gender = data['gender'] ?? "Male";
+
+    // ✅ LOAD PREVIOUS PHOTO URL
+    _photoUrl = data['photoUrl'];
 
     setState(() {
       isLoading = false;
@@ -68,39 +68,37 @@ class _EditProfilePageState extends State<EditProfilePage> {
 
   Future<void> _saveProfile() async {
     if (!_formKey.currentState!.validate()) return;
-
     if (user == null) return;
 
-    String? imageUrl = _photoUrl;
-
-    if (_imageFile != null) {
-      final ref = FirebaseStorage.instance
-          .ref()
-          .child('profile_pictures')
-          .child('${user!.uid}.jpg');
-
-      await ref.putFile(_imageFile!);
-      imageUrl = await ref.getDownloadURL();
-    }
-
     try {
+      String? imageUrl = _photoUrl;
 
-      //Update Firestore
+      // ✅ Upload only if new image selected
+      if (_imageFile != null) {
+        final ref = FirebaseStorage.instance
+            .ref()
+            .child('profile_pictures')
+            .child('${user!.uid}.jpg');
+
+        await ref.putFile(_imageFile!);
+        imageUrl = await ref.getDownloadURL();
+      }
+
+      // ✅ Only update photoUrl if it exists
+      final updateData = {
+        "name": nameController.text.trim(),
+        "phoneNumber": phoneController.text.trim(),
+        "gender": gender,
+      };
+
+      if (imageUrl != null) {
+        updateData["photoUrl"] = imageUrl;
+      }
+
       await FirebaseFirestore.instance
           .collection('users')
           .doc(user!.uid)
-          .update({
-        "name": nameController.text.trim(),
-        "phoneNumber": phoneController.text.trim(),
-        "location": locationController.text.trim(),
-        "gender": gender,
-        "photoUrl": imageUrl,
-      });
-
-      // 🔐 Update password if entered
-      if (passwordController.text.isNotEmpty) {
-        await user!.updatePassword(passwordController.text.trim());
-      }
+          .update(updateData);
 
       if (!mounted) return;
 
@@ -111,9 +109,8 @@ class _EditProfilePageState extends State<EditProfilePage> {
       Navigator.pop(context);
 
     } catch (e) {
-
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Error: ${e.toString()}")),
+        const SnackBar(content: Text("Something went wrong.")),
       );
     }
   }
@@ -232,29 +229,6 @@ class _EditProfilePageState extends State<EditProfilePage> {
                 ),
               ),
 
-              const SizedBox(height: 20),
-
-              // Location
-              TextFormField(
-                controller: locationController,
-                decoration: const InputDecoration(
-                  labelText: "Location",
-                  border: OutlineInputBorder(),
-                ),
-              ),
-
-              const SizedBox(height: 20),
-
-              // Password
-              TextFormField(
-                controller: passwordController,
-                obscureText: true,
-                decoration: const InputDecoration(
-                  labelText: "New Password (Optional)",
-                  border: OutlineInputBorder(),
-                ),
-              ),
-
               const SizedBox(height: 30),
 
               SizedBox(
@@ -267,7 +241,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
                       borderRadius: BorderRadius.circular(30),
                     ),
                   ),
-                  child: const Text("Save Changes"),
+                  child: const Text("Save Changes", style: TextStyle(color: Colors.black),),
                 ),
               ),
             ],

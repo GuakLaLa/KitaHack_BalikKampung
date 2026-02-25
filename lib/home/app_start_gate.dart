@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:floodsense/admin/admin_navigation.dart';
+import 'package:floodsense/home/auth_gate.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -29,35 +30,12 @@ class _AppStartGateState extends State<AppStartGate> {
     final prefs = await SharedPreferences.getInstance();
     final seen = prefs.getBool('seenGetStarted') ?? false;
 
-        if (!seen) {
+    if (!seen) {
       setState(() => isFirstLaunch = true);
       return;
     }
 
-    final user = FirebaseAuth.instance.currentUser;
-
-    if (user == null) {
-      setState(() {
-        isFirstLaunch = false;
-        nextPage = const NavigationPage(); //Guest Mode
-      });
-      return;
-    }
-
-    // 🔥 Fetch role from Firestore
-    final doc = await FirebaseFirestore.instance
-        .collection("users")
-        .doc(user.uid)
-        .get();
-
-    final role = doc.data()?["role"] ?? "user";
-
-    setState(() {
-      isFirstLaunch = false;
-      nextPage = role == "admin"
-          ? const AdminNavigationPage()
-          : const NavigationPage();
-    });
+    setState(() => isFirstLaunch = false);
   }
 
   @override
@@ -68,28 +46,22 @@ class _AppStartGateState extends State<AppStartGate> {
       );
     }
 
-    // FIRST LAUNCH → Get Started
+    // FIRST LAUNCH
     if (isFirstLaunch!) {
       return GetStartedPage(
         onFinished: () async {
           final prefs = await SharedPreferences.getInstance();
           await prefs.setBool('seenGetStarted', true);
+
           Navigator.pushReplacement(
             context,
-            MaterialPageRoute(builder: (_) => const NavigationPage()),
+            MaterialPageRoute(builder: (_) => const AuthGate()),
           );
         },
       );
     }
 
     // NOT FIRST LAUNCH
-    if (nextPage == null) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
-    }
-
-    return nextPage!;
-
+    return const AuthGate();
   }
 }

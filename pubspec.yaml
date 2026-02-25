@@ -52,6 +52,8 @@ dependencies:
   google_generative_ai: ^0.4.7
   location: ^5.0.1
   google_places_flutter: ^2.1.1
+  flutter_local_notifications: ^20.1.0
+  firebase_messaging: ^16.1.1
 
 dev_dependencies:
   flutter_test:
