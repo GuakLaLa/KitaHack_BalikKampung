@@ -7,11 +7,13 @@ import 'package:floodsense/home/flood_prediction.dart';
 import 'package:floodsense/home/flood_forecast.dart';
 import 'package:floodsense/home/flood_timer.dart';
 import 'package:floodsense/services/flood_service.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:geolocator/geolocator.dart';
 import 'rainfall_anomaly.dart';
 import 'weather_forecast.dart';
 import 'reminder_checklist.dart';
+import 'package:floodsense/services/location_service.dart';
 
 class HomePage extends StatefulWidget {
   final String selectedDistrict;
@@ -60,7 +62,6 @@ class _HomePageState extends State<HomePage> {
   void initState() {
     super.initState();
     // Set default district to first one
-    _selectedDistrict = FloodService.supportedDistricts.first;
     _fetchFloodData(widget.selectedDistrict);
     _initAll();
   }
@@ -69,8 +70,7 @@ class _HomePageState extends State<HomePage> {
     final pos = await _getUserLocation();
     if (pos != null) {
       await _findNearestDistrict(pos);
-    }
-    await _fetchFloodData(_selectedDistrict!); // Fetch initial data
+    }// Fetch initial data
   }
 
   // Get user's location lat long
@@ -118,12 +118,11 @@ class _HomePageState extends State<HomePage> {
       }
     }
 
-    if (nearest != null) {
-      setState(() {
-        _selectedDistrict = nearest;
-      });
-      // Fetch fresh data for the selected nearest district
+    if (nearest != null && nearest != widget.selectedDistrict) {
+      widget.onDistrictChanged(nearest);
       await _fetchFloodData(nearest);
+    }
+  }
 
 
   @override
@@ -174,7 +173,7 @@ class _HomePageState extends State<HomePage> {
     final bool floodEnabled = prefs['floodAlert'] ?? false;
     final bool rainfallEnabled = prefs['rainfallAlert'] ?? false;
 
-    // 🚨 Flood Risk Notification
+    //Flood Risk Notification
     if (floodEnabled &&
         data.riskLevel.toLowerCase() == "high" &&
         _lastRiskLevel != data.riskLevel) {
@@ -184,7 +183,7 @@ class _HomePageState extends State<HomePage> {
       await NotificationService.showFloodAlert(data.location);
     }
 
-    // 🌧 Rainfall Anomaly Notification
+    //Rainfall Anomaly Notification
     if (rainfallEnabled) {
       try {
         final analysis = await RainfallAnomalyService()
