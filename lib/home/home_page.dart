@@ -1,3 +1,7 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:floodsense/profile/notifications.dart';
+import 'package:floodsense/services/rainfall_service.dart';
 import 'package:flutter/material.dart';
 import 'package:floodsense/home/flood_prediction.dart';
 import 'package:floodsense/home/flood_forecast.dart';
@@ -29,6 +33,15 @@ class _HomePageState extends State<HomePage> {
   bool _isLoading = false;
   String? _errorMessage;
 
+  // Location
+  double? latitude;
+  double? longitude;
+  bool isLocationLoading = true;
+
+  // Prevent notification spam
+  String? _lastRiskLevel;
+  String? _lastWeather;
+  
   @override
   void initState() {
     super.initState();
@@ -59,6 +72,7 @@ class _HomePageState extends State<HomePage> {
 
       // Check if we should show the alert dialog
       _maybeShowFloodAlert(data);
+      _checkNotificationConditions(data);
     } catch (e) {
       setState(() {
         _errorMessage = 'Error: ${e.toString()}';
@@ -66,6 +80,46 @@ class _HomePageState extends State<HomePage> {
       });
     }
   }
+
+Future<void> _checkNotificationConditions(FloodPredictionResponse data) async {
+  final user = FirebaseAuth.instance.currentUser;
+  if (user == null) return;
+
+  final userDoc = await FirebaseFirestore.instance
+      .collection('users')
+      .doc(user.uid)
+      .get();
+
+  final prefs = userDoc.data();
+  if (prefs == null) return;
+
+  final bool floodEnabled = prefs['floodAlert'] ?? false;
+  final bool rainfallEnabled = prefs['rainfallAlert'] ?? false;
+
+  // 🚨 High flood risk
+  if (floodEnabled && data.riskLevel.toLowerCase() == "high") {
+    await NotificationService.showFloodAlert(data.location);
+  }
+
+  // 🌧 Rainfall Anomaly
+  if (rainfallEnabled && latitude != null && longitude != null) {
+    try {
+      final analysis = await RainfallAnomalyService()
+          .fetchAndAnalyze(latitude!, longitude!, days: 8);
+
+      // Only notify if anomaly ratio is above normal
+      if (analysis.ratio > 1.2) {
+        await NotificationService.showRainfallAlert(
+          location: analysis.locationName ?? "Unknown",
+          anomalyType: analysis.anomalyType,
+          rainfall: analysis.todayRainfall,
+        );
+      }
+    } catch (e) {
+      print("Failed to fetch rainfall anomaly: $e");
+    }
+  }
+}
 
   Future<void> _maybeShowFloodAlert(FloodPredictionResponse data) async {
     final int? daysUntilFlood = data.daysUntilFlood;
