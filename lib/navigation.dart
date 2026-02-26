@@ -218,7 +218,7 @@ class _FirstPageState extends State<NavigationPage> {
                                         onPressed: () {
                                           Navigator.pop(context, false);
                                         },
-                                        child: const Text("Cancel"),
+                                        child: const Text("Cancel", style: TextStyle(color: Colors.black),),
                                       ),
                                     ),
                                     const SizedBox(width: 12),
@@ -230,7 +230,7 @@ class _FirstPageState extends State<NavigationPage> {
                                         onPressed: () {
                                           Navigator.pop(context, true);
                                         },
-                                        child: const Text("Logout"),
+                                        child: const Text("Logout", style: TextStyle(color: Colors.black),),
                                       ),
                                     ),
                                   ],

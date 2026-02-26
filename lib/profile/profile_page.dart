@@ -148,6 +148,10 @@ class _ProfilePageState extends State<ProfilePage> {
                   SwitchListTile(
                     title: const Text("Flood alert"),
                     value: floodAlert,
+                      activeColor: const Color(0xFF8CCCD3), // thumb color ON
+                      activeTrackColor: const Color(0xFF8CCCD3).withOpacity(0.5), // track color ON
+                      inactiveThumbColor: Colors.grey, // thumb OFF
+                      inactiveTrackColor: Colors.grey.withOpacity(0.3), // track OFF
                     onChanged: (value) async {
                       setState(() => floodAlert = value);
                       await _updateNotification(
@@ -158,6 +162,10 @@ class _ProfilePageState extends State<ProfilePage> {
                   SwitchListTile(
                     title: const Text("Rainfall anomaly alert"),
                     value: rainfallAlert,
+                      activeColor: const Color(0xFF8CCCD3), // thumb color ON
+                      activeTrackColor: const Color(0xFF8CCCD3).withOpacity(0.5), // track color ON
+                      inactiveThumbColor: Colors.grey, // thumb OFF
+                      inactiveTrackColor: Colors.grey.withOpacity(0.3), // track OFF
                     onChanged: (value) async {
                       setState(() => rainfallAlert = value);
                       await _updateNotification(

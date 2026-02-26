@@ -146,12 +146,13 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(30),
                     ),
+                    backgroundColor: Color(0xFF8CCCD3),
                   ),
                   child: isLoading
                       ? const CircularProgressIndicator(
-                          color: Colors.white,
+                          color: Color(0xFF8CCCD3),
                         )
-                      : const Text("Change Password"),
+                      : const Text("Change Password", style: TextStyle(color: Colors.black),),
                 ),
               ),
             ],

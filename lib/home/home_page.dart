@@ -47,6 +47,7 @@ class _HomePageState extends State<HomePage> with AutomaticKeepAliveClientMixin 
   // Prevent notification spam
   String? _lastAnomalyType;
   String? _lastRiskLevel;
+  String? _lastNotifiedDistrict;
   
   // District coordinates (lat, lon)
   static const Map<String, List<double>> DISTRICT_COORDS = {
@@ -187,12 +188,15 @@ class _HomePageState extends State<HomePage> with AutomaticKeepAliveClientMixin 
     final bool floodEnabled = prefs['floodAlert'] ?? false;
     final bool rainfallEnabled = prefs['rainfallAlert'] ?? false;
 
-    //Flood Risk Notification
+    // Flood Risk Notification with district-aware suppression
     if (floodEnabled &&
         data.riskLevel.toLowerCase() == "high" &&
-        _lastRiskLevel != data.riskLevel) {
+        (_lastNotifiedDistrict != _selectedDistrict ||
+        _lastRiskLevel != data.riskLevel)) {
 
+      // Update last notified values
       _lastRiskLevel = data.riskLevel;
+      _lastNotifiedDistrict = _selectedDistrict;
 
       await NotificationService.showFloodAlert(data.location);
     }
@@ -201,7 +205,7 @@ class _HomePageState extends State<HomePage> with AutomaticKeepAliveClientMixin 
     if (rainfallEnabled) {
       try {
         final analysis = await RainfallAnomalyService()
-            .fetchAndAnalyze(widget.selectedDistrict);
+            .fetchAndAnalyze(_selectedDistrict);
 
         print("Rainfall ratio: ${analysis.ratio}");
         print("Today rainfall: ${analysis.todayRainfall}");
@@ -282,11 +286,16 @@ class _HomePageState extends State<HomePage> with AutomaticKeepAliveClientMixin 
                   );
                 }).toList(),
                 onChanged: (String? newValue) {
-                  if (newValue != null) {
-                    widget.onDistrictChanged(newValue); // notify NavigationPage
-                    _fetchFloodData(newValue);
+                  if (newValue != null && newValue != _selectedDistrict) {
+                    setState(() {
+                      _selectedDistrict = newValue;   //UPDATE LOCAL STATE
+                      _floodData = null;             //optional: force refresh UI
+                    });
+
+                    widget.onDistrictChanged(newValue);  //notify parent
+                    _fetchFloodData(newValue);           //fetch new data
                   }
-                },
+                }
               ),
             ),
 
