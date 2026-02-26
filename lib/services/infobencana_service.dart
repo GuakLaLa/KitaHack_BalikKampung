@@ -54,24 +54,24 @@ class ActivePPS {
     return 250;
   }
 
-  double get occupancyRate =>
-      effectiveCapacity > 0 ? (mangsa / effectiveCapacity).clamp(0.0, 1.0) : 0.0;
+  double get _rate =>
+    effectiveCapacity > 0 ? mangsa / effectiveCapacity : kapasiti / 100.0;
 
-  Color get statusColor {
-    final r = kapasiti > 0 ? kapasiti / 100.0 : occupancyRate;
-    if (r > 1.0) return const Color(0xFF6A0DAD); // added purple for overcapacity (>100%)
-    if (r >= 0.8) return const Color(0xFFB71C1C);
-    if (r >= 0.4) return const Color(0xFFFFD600);
-    return const Color(0xFF1B5E20);
-  }
+Color get statusColor {
+  final r = _rate;
+  if (r > 1.0)  return const Color(0xFF6A0DAD); // purple — overcapacity
+  if (r >= 0.8) return const Color(0xFFB71C1C); // red — nearly full
+  if (r >= 0.4) return const Color(0xFFFFD600); // yellow — moderate
+  return const Color(0xFF1B5E20);               // green — available
+}
 
-  String get statusLabel {
-    final r = kapasiti > 0 ? kapasiti / 100.0 : occupancyRate;
-    if (r > 1.0) return 'OVERCAPACITY';
-    if (r >= 0.8) return 'NEARLY FULL';
-    if (r >= 0.4) return 'MODERATE';
-    return 'AVAILABLE';
-  }
+String get statusLabel {
+  final r = _rate;
+  if (r > 1.0)  return 'OVERCAPACITY';
+  if (r >= 0.8) return 'NEARLY FULL';
+  if (r >= 0.4) return 'MODERATE';
+  return 'AVAILABLE';
+}
 
   String get formattedDate =>
       '${openedDate.day.toString().padLeft(2, '0')}/'

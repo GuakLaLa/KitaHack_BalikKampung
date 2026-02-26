@@ -29,12 +29,12 @@ class _ShelterPageState extends State<ShelterPage>
   final _placesService      = PlacesShelterService();
   final _infoBencanaService = InfoBencanaService();
 
-  List<NearbyShelter> _nearby       = [];
+  List<NearbyShelter> _nearby      = [];
   InfoBencanaResult?  _activeResult;
   bool _loadingNearby = true;
   bool _loadingActive = true;
   String  _typeFilter  = 'all';
-  String? _stateFilter; // null = All — purely client-side, never triggers refetch
+  String? _stateFilter;
 
   @override
   void initState() {
@@ -50,6 +50,7 @@ class _ShelterPageState extends State<ShelterPage>
   Future<void> _loadNearby() async {
     setState(() => _loadingNearby = true);
     final list = await _placesService.fetchNearby(widget.latitude, widget.longitude);
+    print('DEBUG nearby result: ${list.length} shelters');
     if (mounted) setState(() { _nearby = list; _loadingNearby = false; });
   }
 
@@ -66,43 +67,30 @@ class _ShelterPageState extends State<ShelterPage>
     return _nearby.where((s) => s.shelterType.filterKey == _typeFilter).toList();
   }
 
-  List<DisasterDistrict> get _filteredDistricts {
-    final all = _activeResult?.districts ?? [];
+  List<ActivePPS> get _filteredPPS {
+    final all = _activeResult?.ppsList ?? [];
     if (_stateFilter == null) return all;
-    return all.where((d) => d.state == _stateFilter).toList();
+    return all.where((p) => p.state == _stateFilter).toList();
   }
 
-  // State names for filter chips — from sidebar (clean state names)
-  // Falls back to district states if sidebar parse failed
   List<String> get _activeStateNames {
     final r = _activeResult;
     if (r == null) return [];
     if (r.states.isNotEmpty) {
       return (r.states.map((s) => s.state).toSet().toList()..sort());
     }
-    return (r.districts.map((d) => d.state).toSet().toList()..sort());
+    return (r.ppsList.map((p) => p.state).toSet().toList()..sort());
   }
 
-  // Named PPS for a district — matches by district+state
-  // Works for both API-fetched names and synthesised fallback entries
-  List<ActivePPS> _namedPPSFor(DisasterDistrict d) {
-    final all = _activeResult?.ppsList ?? [];
-    // Exact match: district AND state
-    final exact = all.where((p) =>
-        p.district.toLowerCase() == d.district.toLowerCase() &&
-        p.state.toLowerCase() == d.state.toLowerCase()).toList();
-    if (exact.isNotEmpty) return exact;
-    // Fallback: district only (in case state translation differs slightly)
-    return all.where((p) =>
-        p.district.toLowerCase() == d.district.toLowerCase()).toList();
-  }
+  // ── Occupancy helper ──────────────────────────────────────────
+  // Derives % from evacuees / effectiveCapacity for consistency.
+  // Falls back to API kapasiti only if effectiveCapacity is 0.
 
-  // Opened date from StateEntry for this district's state
-  DateTime? _openedDateFor(DisasterDistrict d) {
-    final entry = (_activeResult?.states ?? [])
-        .where((s) => s.state == d.state)
-        .firstOrNull;
-    return entry?.openedDate;
+  double _occupancyPct(ActivePPS p) {
+    if (p.effectiveCapacity > 0) {
+      return (p.mangsa / p.effectiveCapacity * 100).clamp(0.0, 999.0);
+    }
+    return p.kapasiti.toDouble();
   }
 
   // ── URL helpers ───────────────────────────────────────────────
@@ -347,6 +335,8 @@ class _ShelterPageState extends State<ShelterPage>
     final r = _activeResult;
     if (r == null || !r.hasActiveDisasters) return _noActiveDisasters();
 
+    final ppsList = _filteredPPS;
+
     return ListView(padding: const EdgeInsets.all(16), children: [
       _activeHeader(r),
       const SizedBox(height: 12),
@@ -357,13 +347,16 @@ class _ShelterPageState extends State<ShelterPage>
       _stateFilterBar(r),
       const SizedBox(height: 12),
       Text(
-        _stateFilter != null ? 'Active PPS — $_stateFilter' : 'Active Evacuation Centers',
+        _stateFilter != null
+            ? 'Active PPS — $_stateFilter (${ppsList.length})'
+            : 'Active Evacuation Centers (${ppsList.length})',
         style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700,
             color: Color(0xFF2D3748))),
       const SizedBox(height: 8),
-      ..._filteredDistricts.isEmpty
-          ? [_emptyState('No active PPS in ${_stateFilter ?? "this area"}', Icons.search_off)]
-          : _filteredDistricts.map(_districtCard),
+      ...ppsList.isEmpty
+          ? [_emptyState('No active PPS in ${_stateFilter ?? "this area"}',
+              Icons.search_off)]
+          : ppsList.map(_ppsCard),
       const SizedBox(height: 10),
       _footer(r),
     ]);
@@ -430,7 +423,7 @@ class _ShelterPageState extends State<ShelterPage>
   Widget _impactCard(InfoBencanaResult r) {
     final affected  = r.totalMangsa > 0 ? r.totalMangsa : 500;
     final ppsNeeded = ImpactEstimator.estimatePPSNeeded(affected);
-    final totalCap  = r.districts.fold<int>(0, (s, d) => s + d.estimatedCapacity);
+    final totalCap  = r.ppsList.fold<int>(0, (s, p) => s + p.effectiveCapacity);
     final remaining = (totalCap - r.totalMangsa).clamp(0, totalCap);
     final overflow  = ImpactEstimator.isOverflowRisk(
         predictedAffected: affected, totalRemainingCapacity: remaining);
@@ -500,10 +493,10 @@ class _ShelterPageState extends State<ShelterPage>
     ]),
   );
 
-  // ── State filter bar — white unselected, light grey selected ──
+  // ── State filter bar ──────────────────────────────────────────
 
   Widget _stateFilterBar(InfoBencanaResult r) {
-    final stateNames = _activeStateNames; // ← from sidebar StateEntry list
+    final stateNames = _activeStateNames;
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Row(children: [
         const Icon(Icons.filter_list, size: 14, color: Color(0xFF6B7280)),
@@ -522,15 +515,13 @@ class _ShelterPageState extends State<ShelterPage>
       SizedBox(height: 36, child: ListView(
         scrollDirection: Axis.horizontal,
         children: [
-          _stateChip(label: 'All', count: r.totalPPS,
-              selected: _stateFilter == null,
-              onTap: () => setState(() => _stateFilter = null)),
+          _stateChip(
+            label: 'All', count: r.totalPPS,
+            selected: _stateFilter == null,
+            onTap: () => setState(() => _stateFilter = null)),
           const SizedBox(width: 8),
           ...stateNames.map((stateName) {
-            // Count PPS for this state from districts
-            final count = r.districts
-                .where((d) => d.state == stateName)
-                .fold(0, (s, d) => s + d.ppsCount);
+            final count = r.ppsList.where((p) => p.state == stateName).length;
             return Padding(
               padding: const EdgeInsets.only(right: 8),
               child: _stateChip(
@@ -569,25 +560,28 @@ class _ShelterPageState extends State<ShelterPage>
                   borderRadius: BorderRadius.circular(10)),
                 child: Text('$count', style: TextStyle(fontSize: 10,
                     fontWeight: FontWeight.w700,
-                    color: selected ? const Color(0xFF111827) : const Color(0xFF6B7280)))),
+                    color: selected
+                        ? const Color(0xFF111827) : const Color(0xFF6B7280)))),
             ],
           ]),
         ),
       );
 
-  // ── District card ─────────────────────────────────────────────
+  // ── Individual PPS card ───────────────────────────────────────
 
-  Widget _districtCard(DisasterDistrict d) {
-    final statusColor = d.statusColor;
-    final named       = _namedPPSFor(d); // individual PPS names from statistik table
+  Widget _ppsCard(ActivePPS p) {
+    final statusColor  = p.statusColor;
+    final occupancyPct = _occupancyPct(p);
+    final occupancyStr = '${occupancyPct.toStringAsFixed(1)}%';
 
     return Card(
       margin: const EdgeInsets.only(bottom: 10), elevation: 0,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14),
+      shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14),
           side: BorderSide(color: statusColor.withOpacity(0.4), width: 1.5)),
       color: Colors.white,
       child: InkWell(
-        onTap: () => _showDistrictSheet(d),
+        onTap: () => _showPPSSheet(p),
         borderRadius: BorderRadius.circular(14),
         child: Padding(padding: const EdgeInsets.all(14),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -596,150 +590,133 @@ class _ShelterPageState extends State<ShelterPage>
                   decoration: BoxDecoration(color: statusColor,
                       borderRadius: BorderRadius.circular(2))),
               const SizedBox(width: 10),
-              Expanded(child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Line 1: PPS name (bold) — real name or "District PPS" placeholder
-                  Text(
-                    named.isNotEmpty ? named.first.name : '${d.district} PPS',
+              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                Text(p.name,
                     style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700,
                         color: Color(0xFF2D3748)),
                     maxLines: 2, overflow: TextOverflow.ellipsis),
-                  const SizedBox(height: 2),
-                  // Line 2: "District · State" (small, grey)
-                  Text(
-                    '${d.district}  ·  ${d.state}',
+                const SizedBox(height: 2),
+                Text('${p.district}  ·  ${p.state}',
                     style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
                     maxLines: 1, overflow: TextOverflow.ellipsis),
-                ],
-              )),
+              ])),
               Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                _pill(d.statusLabel, statusColor),
+                _pill(p.statusLabel, statusColor),
                 const SizedBox(height: 4),
-                _pill(d.disasterType, d.disasterType == 'Flood'
+                _pill(p.disasterType, p.disasterType == 'Flood'
                     ? const Color(0xFF4285F4) : Colors.orange),
               ]),
             ]),
             const SizedBox(height: 10),
             Row(children: [
-              _distStat(Icons.people,          '${d.mangsa}',   'Evacuees'),
+              _distStat(Icons.people,          '${p.mangsa}',   'Evacuees'),
               const SizedBox(width: 16),
-              _distStat(Icons.family_restroom, '${d.keluarga}', 'Families'),
+              _distStat(Icons.family_restroom, '${p.keluarga}', 'Families'),
               const SizedBox(width: 16),
               _distStat(Icons.home_work,
-                  d.estimatedCapacity > 0 ? '~${d.estimatedCapacity}' : 'N/A',
+                  p.effectiveCapacity > 0 ? '~${p.effectiveCapacity}' : 'N/A',
                   'Capacity'),
               const Spacer(),
-              // Direction → straight to Maps
               IconButton(
                 onPressed: () {
-                  final p = named.isNotEmpty ? named.first : null;
-                  if (p?.lat != null) {
-                    _openDirections(p!.lat!, p.lng!, p.name);
+                  if (p.lat != null) {
+                    _openDirections(p.lat!, p.lng!, p.name);
                   } else {
-                    // Search by PPS name if available, otherwise district
-                    final query = p != null
-                        ? '${p.name} ${d.state} Malaysia'
-                        : '${d.district} ${d.state} Malaysia evacuation center';
-                    _searchMaps(query);
+                    _searchMaps('${p.name} ${p.state} Malaysia');
                   }
                 },
                 icon: const Icon(Icons.directions, color: Color(0xFF4285F4), size: 20),
                 style: IconButton.styleFrom(
-                  backgroundColor: const Color(0xFF4285F4).withOpacity(0.1),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  padding: const EdgeInsets.all(7)),
+                    backgroundColor: const Color(0xFF4285F4).withOpacity(0.1),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8)),
+                    padding: const EdgeInsets.all(7)),
                 tooltip: 'Get Directions'),
             ]),
             const SizedBox(height: 8),
-            ClipRRect(borderRadius: BorderRadius.circular(3),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(3),
               child: LinearProgressIndicator(
-                value: (d.kapasiti / 100).clamp(0.0, 1.0), minHeight: 6,
+                value: (occupancyPct / 100).clamp(0.0, 1.0),
+                minHeight: 6,
                 backgroundColor: Colors.grey.shade200,
                 valueColor: AlwaysStoppedAnimation(statusColor))),
             const SizedBox(height: 3),
-            Text('${d.kapasiti.toStringAsFixed(1)}% occupied  '
-                '(${d.mangsa} / '
-                '${d.estimatedCapacity > 0 ? d.estimatedCapacity : "?"} people)',
-                style: TextStyle(fontSize: 9, color: Colors.grey.shade500)),
+            Text(
+              '$occupancyStr occupied  '
+              '(${p.mangsa} / ${p.effectiveCapacity} people)  ·  '
+              'Opened ${p.formattedDate}',
+              style: TextStyle(fontSize: 9, color: Colors.grey.shade500)),
           ]),
         ),
       ),
     );
   }
 
-  Widget _distStat(IconData icon, String value, String label) =>
-      Column(children: [
-        Icon(icon, size: 14, color: Colors.grey.shade500),
-        const SizedBox(height: 2),
-        Text(value, style: const TextStyle(fontSize: 13,
-            fontWeight: FontWeight.w700, color: Color(0xFF2D3748))),
-        Text(label, style: TextStyle(fontSize: 9, color: Colors.grey.shade500)),
-      ]);
+  // ── Individual PPS detail sheet ───────────────────────────────
 
-  // ── District detail sheet ─────────────────────────────────────
-  // Shows: PPS name(s), district, state, disaster, evacuees,
-  //        families, capacity, opened date → Get Directions button
-
-  void _showDistrictSheet(DisasterDistrict d) {
-    final named     = _namedPPSFor(d);
-    final opened    = d.openedDate ?? _openedDateFor(d);
-    final openedStr = opened != null
-        ? '${opened.day.toString().padLeft(2, '0')}'
-          '/${opened.month.toString().padLeft(2, '0')}'
-          '/${opened.year}'
-        : 'N/A';
-    final title = named.isNotEmpty ? named.first.name : '${d.district} PPS';
+  void _showPPSSheet(ActivePPS p) {
+    final occupancyPct    = _occupancyPct(p);
+    final hasDemographics = p.lelakiDewasa > 0 || p.perempuanDewasa > 0 ||
+        p.kanakLelaki > 0 || p.kanakPerempuan > 0;
 
     showModalBottomSheet(
       context: context, isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => _sheet(
-        height: named.length > 1 ? 0.68 : 0.58,
+        height: hasDemographics ? 0.72 : 0.62,
         child: SingleChildScrollView(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             _handle(), const SizedBox(height: 14),
             Row(children: [
-              _pill(d.statusLabel, d.statusColor),
+              _pill(p.statusLabel, p.statusColor),
               const SizedBox(width: 8),
-              _pill(d.disasterType, d.disasterType == 'Flood'
+              _pill(p.disasterType, p.disasterType == 'Flood'
                   ? const Color(0xFF4285F4) : Colors.orange),
             ]),
             const SizedBox(height: 10),
-            // PPS name(s)
-            Text(title, style: const TextStyle(fontSize: 18,
+            Text(p.name, style: const TextStyle(fontSize: 18,
                 fontWeight: FontWeight.w700, color: Color(0xFF2D3748))),
-            if (named.length > 1)
-              ...named.skip(1).map((p) => Padding(
-                padding: const EdgeInsets.only(top: 4),
-                child: Text(p.name, style: TextStyle(
-                    fontSize: 14, color: Colors.grey.shade700)))),
             const SizedBox(height: 14),
-            _row(Icons.location_city,   'District',  d.district),
-            _row(Icons.map,             'State',     d.state),
-            if (named.isNotEmpty && named.first.mukim.isNotEmpty)
-              _row(Icons.place,         'Mukim',     named.first.mukim),
-            _row(Icons.warning_amber,   'Disaster',  d.disasterType),
-            _row(Icons.people,          'Evacuees',  '${d.mangsa} people'),
-            _row(Icons.family_restroom, 'Families',  '${d.keluarga} families'),
+            _row(Icons.location_city,   'District',  p.district),
+            _row(Icons.map,             'State',     p.state),
+            if (p.mukim.isNotEmpty)
+              _row(Icons.place,         'Mukim',     p.mukim),
+            _row(Icons.warning_amber,   'Disaster',  p.disasterType),
+            _row(Icons.people,          'Evacuees',  '${p.mangsa} people'),
+            _row(Icons.family_restroom, 'Families',  '${p.keluarga} families'),
             _row(Icons.home_work,       'Capacity',
-                d.estimatedCapacity > 0
-                    ? '~${d.estimatedCapacity} people  (${d.kapasiti.toStringAsFixed(1)}% full)'
-                    : '${d.kapasiti.toStringAsFixed(1)}% occupied'),
-            _row(Icons.calendar_today,  'Opened',    openedStr),
+                p.effectiveCapacity > 0
+                    ? '~${p.effectiveCapacity} people  '
+                      '(${occupancyPct.toStringAsFixed(1)}% occupied)'
+                    : '${occupancyPct.toStringAsFixed(1)}% occupied'),
+            _row(Icons.calendar_today,  'Opened',    p.formattedDate),
+            if (hasDemographics) ...[
+              const SizedBox(height: 4),
+              const Divider(height: 20),
+              const Text('Demographics',
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700,
+                      color: Color(0xFF2D3748))),
+              const SizedBox(height: 12),
+              Row(children: [
+                Expanded(child: _demoStat('👨', '${p.lelakiDewasa}',    'Adult M')),
+                Expanded(child: _demoStat('👩', '${p.perempuanDewasa}', 'Adult F')),
+                Expanded(child: _demoStat('👦', '${p.kanakLelaki}',     'Boy')),
+                Expanded(child: _demoStat('👧', '${p.kanakPerempuan}',  'Girl')),
+                Expanded(child: _demoStat('👶',
+                    '${p.bayiLelaki + p.bayiPerempuan}', 'Infant')),
+              ]),
+            ],
             const SizedBox(height: 20),
             SizedBox(width: double.infinity,
               child: ElevatedButton.icon(
                 onPressed: () {
                   Navigator.pop(context);
-                  final p = named.isNotEmpty ? named.first : null;
-                  if (p?.lat != null) {
-                    _openDirections(p!.lat!, p.lng!, p.name);
+                  if (p.lat != null) {
+                    _openDirections(p.lat!, p.lng!, p.name);
                   } else {
-                    final query = p != null
-                        ? '${p.name} ${d.state} Malaysia'
-                        : '${d.district} ${d.state} Malaysia evacuation center';
-                    _searchMaps(query);
+                    _searchMaps('${p.name} ${p.state} Malaysia');
                   }
                 },
                 icon: const Icon(Icons.directions),
@@ -756,11 +733,19 @@ class _ShelterPageState extends State<ShelterPage>
     );
   }
 
+  Widget _demoStat(String emoji, String value, String label) => Column(children: [
+    Text(emoji, style: const TextStyle(fontSize: 18)),
+    const SizedBox(height: 2),
+    Text(value, style: const TextStyle(fontSize: 13,
+        fontWeight: FontWeight.w700, color: Color(0xFF2D3748))),
+    Text(label, style: TextStyle(fontSize: 9, color: Colors.grey.shade500)),
+  ]);
+
   Widget _footer(InfoBencanaResult r) {
     final t = r.lastUpdated;
     final updated =
-        '${t.day.toString().padLeft(2,'0')}/${t.month.toString().padLeft(2,'0')}/${t.year} '
-        '${t.hour.toString().padLeft(2,'0')}:${t.minute.toString().padLeft(2,'0')}';
+        '${t.day.toString().padLeft(2, '0')}/${t.month.toString().padLeft(2, '0')}/${t.year} '
+        '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
     return Container(
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(color: Colors.grey.shade100,
@@ -780,7 +765,8 @@ class _ShelterPageState extends State<ShelterPage>
     child: Padding(padding: const EdgeInsets.all(40),
       child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
         Container(padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(color: Colors.green.shade50, shape: BoxShape.circle),
+            decoration: BoxDecoration(color: Colors.green.shade50,
+                shape: BoxShape.circle),
             child: Icon(Icons.check_circle, size: 60, color: Colors.green.shade600)),
         const SizedBox(height: 18),
         const Text('No Active Disasters', style: TextStyle(fontSize: 20,
@@ -820,12 +806,12 @@ class _ShelterPageState extends State<ShelterPage>
           ])),
         ]),
         const SizedBox(height: 18), const Divider(height: 1), const SizedBox(height: 14),
-        _row(Icons.location_on,   'Address',      s.address),
-        _row(Icons.straighten,    'Distance',     '${dist.toStringAsFixed(2)} km away'),
-        _row(Icons.people,        'Est. Capacity','~${s.estimatedCapacity} people'),
+        _row(Icons.location_on,   'Address',       s.address),
+        _row(Icons.straighten,    'Distance',      '${dist.toStringAsFixed(2)} km away'),
+        _row(Icons.people,        'Est. Capacity', '~${s.estimatedCapacity} people'),
         if (s.rating != null)
           _row(Icons.star, 'Google Rating', '${s.rating!.toStringAsFixed(1)} / 5.0'),
-        _row(Icons.info_outline,  'PPS Status',   'Designated shelter – standby'),
+        _row(Icons.info_outline,  'PPS Status',    'Designated shelter – standby'),
         const Spacer(),
         SizedBox(width: double.infinity,
           child: ElevatedButton.icon(
@@ -835,7 +821,8 @@ class _ShelterPageState extends State<ShelterPage>
                 backgroundColor: const Color(0xFF4285F4),
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))))),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12))))),
       ])));
   }
 
@@ -870,6 +857,15 @@ class _ShelterPageState extends State<ShelterPage>
       ])),
     ]));
 
+  Widget _distStat(IconData icon, String value, String label) =>
+      Column(children: [
+        Icon(icon, size: 14, color: Colors.grey.shade500),
+        const SizedBox(height: 2),
+        Text(value, style: const TextStyle(fontSize: 13,
+            fontWeight: FontWeight.w700, color: Color(0xFF2D3748))),
+        Text(label, style: TextStyle(fontSize: 9, color: Colors.grey.shade500)),
+      ]);
+
   Widget _emptyState(String msg, IconData icon) => Padding(
     padding: const EdgeInsets.all(40),
     child: Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
@@ -880,7 +876,7 @@ class _ShelterPageState extends State<ShelterPage>
     ])));
 
   String _fmt(int n) => n.toString().replaceAllMapped(
-  RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
-  (m) => '${m[1]},',
-);
+    RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
+    (m) => '${m[1]},',
+  );
 }
