@@ -110,15 +110,24 @@ class FloodPredictionCard extends StatelessWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                // Risk Level
-                Text(
-                  riskLevel,
-                  style: TextStyle(
-                    fontSize: 64,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black,
+                Expanded(
+                  child: Container(
+                    alignment: Alignment.centerLeft, 
+                    child: FittedBox( 
+                      fit: BoxFit.scaleDown, 
+                      child: Text(
+                        riskLevel,
+                        style: TextStyle(
+                          fontSize: 64, 
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black,
+                        ),
+                      ),
+                    ),
                   ),
                 ),
+
+                SizedBox(width: 10),
 
                 // Weather Icon
                 Column(
@@ -148,7 +157,7 @@ class FloodPredictionCard extends StatelessWidget {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        'Water Depth',
+                        'Affected Area',
                         style: TextStyle(
                           fontSize: 14,
                           color: Colors.black87,

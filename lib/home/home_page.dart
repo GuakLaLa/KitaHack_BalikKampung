@@ -29,12 +29,15 @@ class HomePage extends StatefulWidget {
   State<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> {
+class _HomePageState extends State<HomePage> with AutomaticKeepAliveClientMixin {
   static const _prefsKey = 'flood_alert_last_shown';
 
   FloodPredictionResponse? _floodData;
   bool _isLoading = false;
   String? _errorMessage;
+
+  // keep track of the selected district locally so it survives rebuilds
+  late String _selectedDistrict;
 
   // Location
   double? latitude;
@@ -61,8 +64,9 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
+    _selectedDistrict = widget.selectedDistrict;
     // Set default district to first one
-    _fetchFloodData(widget.selectedDistrict);
+    _fetchFloodData(_selectedDistrict);
     _initAll();
   }
 
@@ -118,7 +122,8 @@ class _HomePageState extends State<HomePage> {
       }
     }
 
-    if (nearest != null && nearest != widget.selectedDistrict) {
+    if (nearest != null && nearest != _selectedDistrict) {
+      _selectedDistrict = nearest;
       widget.onDistrictChanged(nearest);
       await _fetchFloodData(nearest);
     }
@@ -130,11 +135,19 @@ class _HomePageState extends State<HomePage> {
     super.didUpdateWidget(oldWidget);
     // Refetch when parent changes the district
     if (oldWidget.selectedDistrict != widget.selectedDistrict) {
+      _selectedDistrict = widget.selectedDistrict;
       _fetchFloodData(widget.selectedDistrict);
     }
   }
 
+  String? _currentDistrict;
+
   Future<void> _fetchFloodData(String district) async {
+    // if we already fetched and the same district, skip reloading
+    if (_floodData != null && _currentDistrict == district) {
+      return;
+    }
+
     setState(() {
       _isLoading = true;
       _errorMessage = null;
@@ -144,6 +157,7 @@ class _HomePageState extends State<HomePage> {
       final data = await FloodService.getFloodPrediction(district);
       setState(() {
         _floodData = data;
+        _currentDistrict = district;
         _isLoading = false;
       });
 
@@ -236,6 +250,7 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context); // required when using AutomaticKeepAliveClientMixin
     return Scaffold(
       body: SingleChildScrollView(
         child: Column(
@@ -256,7 +271,7 @@ class _HomePageState extends State<HomePage> {
                 ],
               ),
               child: DropdownButton<String>(
-                value: widget.selectedDistrict,
+                value: _selectedDistrict,
                 isExpanded: true,
                 underline: const SizedBox.shrink(),
                 hint: const Text('Select a district'),
@@ -342,12 +357,12 @@ class _HomePageState extends State<HomePage> {
 
             // Rainfall Anomaly Detection — uses district for consistent location
             RainfallAnomalyCard(
-              selectedDistrict: widget.selectedDistrict,
+              selectedDistrict: _selectedDistrict,
             ),
 
             // 7-Day Weather Forecast — uses district for consistent location
             WeatherForecastCard(
-              selectedDistrict: widget.selectedDistrict,
+              selectedDistrict: _selectedDistrict,
             ),
 
             // Reminder Checklist
@@ -358,4 +373,7 @@ class _HomePageState extends State<HomePage> {
       backgroundColor: const Color(0xFFA6E3E9),
     );
   }
+
+  @override
+  bool get wantKeepAlive => true;
 }

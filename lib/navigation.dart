@@ -67,7 +67,11 @@ class _FirstPageState extends State<NavigationPage> {
       ),
 
       drawer: _buildDrawer(),
-      body: _pages[_selectedIndex],
+      // use IndexedStack so that tabs are kept alive instead of rebuilding each time
+      body: IndexedStack(
+        index: _selectedIndex,
+        children: _pages,
+      ),
 
       bottomNavigationBar: BottomNavigationBar(
         unselectedItemColor: unselectedColor,
