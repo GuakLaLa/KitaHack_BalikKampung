@@ -119,19 +119,20 @@ class _EmergencyContactPageState extends State<EmergencyContactPage> {
                 style: ElevatedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 18),
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: BorderRadius.circular(30),
                         ),
+                        backgroundColor: Color(0xFF8CCCD3),
                       ),
                 child: isLoading
                     ? const SizedBox(
                               height: 24,
                               width: 24,
                               child: CircularProgressIndicator(
-                                color: Colors.white,
+                                color: Color(0xFF8CCCD3),
                                 strokeWidth: 3,
                               ),
                             )
-                    : const Text("Save Contact", style: TextStyle(fontSize: 16),),
+                    : const Text("Save Contact", style: TextStyle(fontSize: 16, color: Colors.black),),
               ),
             )
           ],

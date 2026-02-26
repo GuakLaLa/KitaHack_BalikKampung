@@ -18,6 +18,9 @@ class EmergencyFormPage extends StatefulWidget {
 }
 
 class _EmergencyFormPageState extends State<EmergencyFormPage> {
+  static const primaryColor = Color.fromARGB(255, 84, 209, 221);
+
+  bool showValidationErrors = false;
 
   String victimStatus = "Trapped";
   String waterLevel = "";
@@ -30,7 +33,8 @@ class _EmergencyFormPageState extends State<EmergencyFormPage> {
   bool children = false;
 
   final TextEditingController descriptionController = TextEditingController();
-  final TextEditingController preciseLocationController = TextEditingController();
+  final TextEditingController preciseLocationController =
+      TextEditingController();
   final TextEditingController addressController = TextEditingController();
 
   File? selectedImage;
@@ -39,77 +43,79 @@ class _EmergencyFormPageState extends State<EmergencyFormPage> {
   LatLng? selectedLatLng;
   GoogleMapController? mapController;
 
+  void _removeImage() {
+    setState(() {
+      selectedImage = null;
+    });
+  }
+
   // -----------For water level----------------
   final List<String> waterLevels = [
     "Foot",
     "Knee",
     "Waist",
     "Chest",
-    "Head / Above Head"
+    "Head / Above Head",
   ];
 
   // ---------------- LOCATION ----------------
 
-Future<void> _getCurrentLocation() async {
+  Future<void> _getCurrentLocation() async {
+    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) return;
 
-  bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-  if(!serviceEnabled) return;
-
-  LocationPermission permission = await Geolocator.checkPermission();
-  if(permission == LocationPermission.denied){
-    permission = await Geolocator.requestPermission();
-    if(permission == LocationPermission.denied) return;
-  }
-
-  if (permission == LocationPermission.deniedForever) {
-    return;
-  }
-
-  Position position = await Geolocator.getCurrentPosition();
-
-  final latLng = LatLng(position.latitude, position.longitude);
-
-  setState(() => selectedLatLng = latLng);
-
-  mapController?.animateCamera(
-    CameraUpdate.newLatLng(latLng),
-  );
-
-  _fillAddressFromLatLng(latLng);
-}
-
-Future<void> _fillAddressFromLatLng(LatLng latLng) async {
-  try {
-    final placemarks = await placemarkFromCoordinates(
-      latLng.latitude,
-      latLng.longitude,
-    );
-
-    if (placemarks.isNotEmpty) {
-      final place = placemarks.first;
-
-      final street = place.thoroughfare ?? "";
-      final residential = place.subLocality ?? "";
-      final postcode = place.postalCode?? "";
-      final state = place.administrativeArea ?? ""; 
-
-      addressController.text = [
-        street,
-        residential,
-        postcode,
-        state,
-      ].where((e) => e.isNotEmpty).join(", ");
+    LocationPermission permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied) return;
     }
-  } catch (e) {
-    debugPrint("Geocoding error: $e");
+
+    if (permission == LocationPermission.deniedForever) {
+      return;
+    }
+
+    Position position = await Geolocator.getCurrentPosition();
+
+    final latLng = LatLng(position.latitude, position.longitude);
+
+    setState(() => selectedLatLng = latLng);
+
+    mapController?.animateCamera(CameraUpdate.newLatLng(latLng));
+
+    _fillAddressFromLatLng(latLng);
   }
-}
+
+  Future<void> _fillAddressFromLatLng(LatLng latLng) async {
+    try {
+      final placemarks = await placemarkFromCoordinates(
+        latLng.latitude,
+        latLng.longitude,
+      );
+
+      if (placemarks.isNotEmpty) {
+        final place = placemarks.first;
+
+        final street = place.thoroughfare ?? "";
+        final residential = place.subLocality ?? "";
+        final postcode = place.postalCode ?? "";
+        final state = place.administrativeArea ?? "";
+
+        addressController.text = [
+          street,
+          residential,
+          postcode,
+          state,
+        ].where((e) => e.isNotEmpty).join(", ");
+      }
+    } catch (e) {
+      debugPrint("Geocoding error: $e");
+    }
+  }
 
   // ---------------- IMAGE ----------------
 
   Future<void> pickImage() async {
-    final picked =
-        await ImagePicker().pickImage(source: ImageSource.gallery);
+    final picked = await ImagePicker().pickImage(source: ImageSource.gallery);
 
     if (picked != null) {
       setState(() {
@@ -120,52 +126,56 @@ Future<void> _fillAddressFromLatLng(LatLng latLng) async {
 
   // ---------------- VALIDATION ----------------
 
-    bool _validateForm() {
-      List<String> missing = [];
+  bool _validateForm() {
+    List<String> missing = [];
 
-      if (selectedLatLng == null) missing.add("Location");
-      if (victimStatus.isEmpty) missing.add("Current Status");
-      if (waterLevel.isEmpty) missing.add("Water Level");
-      if (peopleAffected == null) missing.add("People Affected");
-      if (descriptionController.text.trim().isEmpty) {
-        missing.add("Situation Description");
-      }
+    if (selectedLatLng == null) missing.add("Location");
+    if (victimStatus.isEmpty) missing.add("Current Status");
+    if (waterLevel.isEmpty) missing.add("Water Level");
+    if (peopleAffected == null) missing.add("People Affected");
 
-      if (missing.isNotEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Please fill: ${missing.join(", ")}")),
-        );
-        return false;
-      }
-
-      return true;
+    if (preciseLocationController.text.trim().isEmpty) {
+      missing.add("Unit / Floor / Block"); // ✅ NEW
     }
+
+    if (descriptionController.text.trim().isEmpty) {
+      missing.add("Situation Description");
+    }
+
+    if (missing.isNotEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Please fill: ${missing.join(", ")}")),
+      );
+      return false;
+    }
+
+    return true;
+  }
 
   // ---------------- SUBMIT ----------------
 
   Future<void> submitReport() async {
-
     final user = FirebaseAuth.instance.currentUser;
 
     if (user == null) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("User not logged in")),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text("User not logged in")));
       }
       return;
-    }   
+    }
 
     final userDoc = await FirebaseFirestore.instance
-      .collection("users")
-      .doc(user.uid)
-      .get();
+        .collection("users")
+        .doc(user.uid)
+        .get();
 
     if (!userDoc.exists) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("User profile missing")),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text("User profile missing")));
       }
       return;
     }
@@ -204,7 +214,7 @@ Future<void> _fillAddressFromLatLng(LatLng latLng) async {
         "email": user.email,
         "reporterName": userData?['name'],
         "reporterNumber": userData?['phoneNumber'],
-        
+
         "victimStatus": victimStatus,
         "waterLevel": waterLevel,
         "peopleAffected": peopleAffected!.toInt(),
@@ -219,8 +229,9 @@ Future<void> _fillAddressFromLatLng(LatLng latLng) async {
         "address": addressController.text,
         "imageUrl": imageUrl,
         "location": GeoPoint(
-            selectedLatLng!.latitude,
-            selectedLatLng!.longitude),
+          selectedLatLng!.latitude,
+          selectedLatLng!.longitude,
+        ),
         "createdAt": FieldValue.serverTimestamp(),
         "rescueStatus": "active",
         "priorityScore": priority["priorityScore"],
@@ -229,27 +240,26 @@ Future<void> _fillAddressFromLatLng(LatLng latLng) async {
       });
 
       if (mounted) {
-      await showDialog(
-        context: context,
-        builder: (_) => AlertDialog(
-          title: const Text("Report Submitted"),
-          content: const Text(
-            "Your emergency report was submitted successfully.\n\n"
-            "Our response team will take quick action.",
+        await showDialog(
+          context: context,
+          builder: (_) => AlertDialog(
+            title: const Text("Report Submitted"),
+            content: const Text(
+              "Your emergency report was submitted successfully.\n\n"
+              "Our response team will take quick action.",
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text("OK"),
+              ),
+            ],
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text("OK"),
-            )
-          ],
-        ),
-      );
+        );
 
-      //Navigate AFTER dialog closes
-      Navigator.pop(context);
-    }
-
+        //Navigate AFTER dialog closes
+        Navigator.pop(context);
+      }
     } catch (e) {
       debugPrint("Submit error: $e");
     }
@@ -257,14 +267,15 @@ Future<void> _fillAddressFromLatLng(LatLng latLng) async {
     setState(() => isLoading = false);
   }
 
-   // ---------------- INFO TITLE ----------------
+  // ---------------- INFO TITLE ----------------
 
   Widget _sectionTitle(String title, String info) {
     return Row(
       children: [
-        Text(title,
-            style:
-                const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+        Text(
+          title,
+          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        ),
         const SizedBox(width: 6),
         GestureDetector(
           onTap: () {
@@ -277,38 +288,32 @@ Future<void> _fillAddressFromLatLng(LatLng latLng) async {
                   TextButton(
                     onPressed: () => Navigator.pop(context),
                     child: const Text("OK"),
-                  )
+                  ),
                 ],
               ),
             );
           },
           child: const Icon(Icons.help_outline, size: 18),
-        )
+        ),
       ],
     );
   }
-  
-
 
   // ---------------- UI ----------------
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text("Emergency Form"),
-      ),
-
+      appBar: AppBar(title: const Text("Emergency Form")),
 
       body: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(16,16,16,100),
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-
             // 📍 MAP SECTION
             _sectionTitle(
-              "Your current location", 
+              "Your current location",
               "Tap the map to select your exact emergency location.",
             ),
 
@@ -319,7 +324,8 @@ Future<void> _fillAddressFromLatLng(LatLng latLng) async {
                 final result = await Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => FullScreenMapPage(initialLocation: selectedLatLng),
+                    builder: (_) =>
+                        FullScreenMapPage(initialLocation: selectedLatLng),
                   ),
                 );
 
@@ -330,7 +336,8 @@ Future<void> _fillAddressFromLatLng(LatLng latLng) async {
               },
               child: SizedBox(
                 height: 200,
-                child: AbsorbPointer( // prevents interaction
+                child: AbsorbPointer(
+                  // prevents interaction
                   child: GoogleMap(
                     initialCameraPosition: const CameraPosition(
                       target: LatLng(3.1390, 101.6869),
@@ -346,21 +353,25 @@ Future<void> _fillAddressFromLatLng(LatLng latLng) async {
                             Marker(
                               markerId: const MarkerId("selected"),
                               position: selectedLatLng!,
-                            )
+                            ),
                           },
                   ),
                 ),
               ),
             ),
 
-
             const SizedBox(height: 10),
 
             TextField(
               controller: preciseLocationController,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 labelText: "Unit / Floor / Block (Precise Location)",
-                border: OutlineInputBorder(),
+                border: const OutlineInputBorder(),
+                errorText:
+                    showValidationErrors &&
+                        preciseLocationController.text.trim().isEmpty
+                    ? "Required field"
+                    : null,
               ),
             ),
 
@@ -377,52 +388,46 @@ Future<void> _fillAddressFromLatLng(LatLng latLng) async {
             SizedBox(height: 20),
 
             // 🚨 STATUS
-            _sectionTitle(
-              "Current status", 
-              "Tell us your safety condition.",
-              ),
+            _sectionTitle("Current status", "Tell us your safety condition."),
 
             RadioListTile(
+              activeColor: primaryColor,
               value: "Trapped",
               groupValue: victimStatus,
-              onChanged: (val) =>
-                  setState(() => victimStatus = val.toString()),
+              onChanged: (val) => setState(() => victimStatus = val.toString()),
               title: const Text("Trapped"),
             ),
             RadioListTile(
+              activeColor: primaryColor,
               value: "Safe but Stranded",
               groupValue: victimStatus,
-              onChanged: (val) =>
-                  setState(() =>victimStatus = val.toString()),
+              onChanged: (val) => setState(() => victimStatus = val.toString()),
               title: const Text("Safe but Stranded"),
             ),
             RadioListTile(
+              activeColor: primaryColor,
               value: "Safe",
               groupValue: victimStatus,
-              onChanged: (val) =>
-                  setState(() => victimStatus = val.toString()),
+              onChanged: (val) => setState(() => victimStatus = val.toString()),
               title: const Text("Safe"),
             ),
 
             const SizedBox(height: 20),
 
             // 🌊 WATER LEVEL
-            _sectionTitle(
-              "Water Level",
-              "Indicate flood severity.",
-            ),
+            _sectionTitle("Water Level", "Indicate flood severity."),
 
             const SizedBox(height: 10),
 
             Slider(
               value: waterLevelIndex?.toDouble() ?? 0,
-              activeColor: waterLevelIndex == null ? Colors.grey : null,
+              activeColor: waterLevelIndex == null ? Colors.grey : primaryColor,
               min: 0,
               max: 4,
               divisions: 4,
-              label: waterLevelIndex == null 
-                ? null
-                : waterLevels[waterLevelIndex!],
+              label: waterLevelIndex == null
+                  ? null
+                  : waterLevels[waterLevelIndex!],
               onChanged: (value) {
                 setState(() {
                   waterLevelIndex = value.toInt();
@@ -434,20 +439,16 @@ Future<void> _fillAddressFromLatLng(LatLng latLng) async {
             const SizedBox(height: 20),
 
             // 👥 PEOPLE
-            _sectionTitle(
-              "People Affected",
-              "Number of people needing help.",
-            ),
+            _sectionTitle("People Affected", "Number of people needing help."),
 
             Slider(
               value: peopleAffected ?? 1,
-              activeColor: peopleAffected == null ? Colors.grey : null,
+              activeColor: peopleAffected == null ? Colors.grey : primaryColor,
               min: 1,
-              max: 20,
-              divisions: 19,
+              max: 50,
+              divisions: 49,
               label: peopleAffected?.round().toString(),
-              onChanged: (val) =>
-                  setState(() => peopleAffected = val),
+              onChanged: (val) => setState(() => peopleAffected = val),
             ),
 
             const SizedBox(height: 20),
@@ -457,18 +458,21 @@ Future<void> _fillAddressFromLatLng(LatLng latLng) async {
               "Special Needs",
               "Choose is there any special needs.",
             ),
-            
+
             CheckboxListTile(
+              activeColor: primaryColor,
               value: children,
               onChanged: (val) => setState(() => children = val!),
               title: const Text("Children"),
             ),
             CheckboxListTile(
+              activeColor: primaryColor,
               value: elderly,
               onChanged: (val) => setState(() => elderly = val!),
               title: const Text("Elderly"),
             ),
             CheckboxListTile(
+              activeColor: primaryColor,
               value: disabled,
               onChanged: (val) => setState(() => disabled = val!),
               title: const Text("Disabled"),
@@ -476,16 +480,18 @@ Future<void> _fillAddressFromLatLng(LatLng latLng) async {
 
             const SizedBox(height: 20),
 
-            _sectionTitle(
-              "Situation Description",
-              "Describe your emergency.",
-            ),
+            _sectionTitle("Situation Description", "Describe your emergency."),
 
             TextField(
               controller: descriptionController,
               maxLines: 4,
-              decoration: const InputDecoration(
-                border: OutlineInputBorder(),
+              decoration: InputDecoration(
+                border: const OutlineInputBorder(),
+                errorText:
+                    showValidationErrors &&
+                        descriptionController.text.trim().isEmpty
+                    ? "Required field"
+                    : null,
               ),
             ),
 
@@ -498,41 +504,89 @@ Future<void> _fillAddressFromLatLng(LatLng latLng) async {
 
             const SizedBox(height: 10),
 
-            ElevatedButton(
-              onPressed: pickImage,
-              child: const Text("Upload Photo"),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: pickImage,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF8CCCD3),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                child: Text(
+                  selectedImage == null ? "Upload Photo" : "Change Photo",
+                  style: const TextStyle(color: Colors.black),
+                ),
+              ),
             ),
+
+            // IMAGE PREVIEW + DELETE BUTTON
+            if (selectedImage != null) ...[
+              const SizedBox(height: 10),
+
+              ClipRRect(
+                borderRadius: BorderRadius.circular(10),
+                child: Image.file(
+                  selectedImage!,
+                  height: 150,
+                  width: double.infinity,
+                  fit: BoxFit.cover,
+                ),
+              ),
+
+              const SizedBox(height: 8),
+
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  TextButton.icon(
+                    onPressed: _removeImage,
+                    icon: const Icon(Icons.delete, color: Colors.red),
+                    label: const Text(
+                      "Remove Photo",
+                      style: TextStyle(color: Colors.red),
+                    ),
+                  ),
+                ],
+              ),
+            ],
 
             const SizedBox(height: 30),
           ],
         ),
       ),
-            
-            
-            bottomNavigationBar: SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: SizedBox(
-                  width: double.infinity,
-                  height: 45,
-                  child: ElevatedButton(
-                    onPressed: isLoading ? null : submitReport,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF8CCCD3),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                    ),
-                    child: isLoading
-                        ? const CircularProgressIndicator(color: Colors.white)
-                        : const Text(
-                            "Submit",
-                            style: TextStyle(fontSize: 16),
-                          ),
-                  ),
+
+      bottomNavigationBar: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: SizedBox(
+            width: double.infinity,
+            height: 45,
+            child: ElevatedButton(
+              onPressed: isLoading
+                  ? null
+                  : () {
+                      setState(() => showValidationErrors = true);
+                      submitReport();
+                    },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF8CCCD3),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
                 ),
               ),
+              child: isLoading
+                  ? const CircularProgressIndicator(color: Colors.white)
+                  : const Text(
+                      "Submit",
+                      style: TextStyle(fontSize: 16, color: Colors.black),
+                    ),
             ),
+          ),
+        ),
+      ),
     );
   }
 }
