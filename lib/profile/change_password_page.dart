@@ -9,14 +9,15 @@ class ChangePasswordPage extends StatefulWidget {
 }
 
 class _ChangePasswordPageState extends State<ChangePasswordPage> {
-
   final user = FirebaseAuth.instance.currentUser;
 
   final _formKey = GlobalKey<FormState>();
 
-  final TextEditingController currentPasswordController = TextEditingController();
+  final TextEditingController currentPasswordController =
+      TextEditingController();
   final TextEditingController newPasswordController = TextEditingController();
-  final TextEditingController confirmPasswordController = TextEditingController();
+  final TextEditingController confirmPasswordController =
+      TextEditingController();
 
   bool isLoading = false;
 
@@ -45,15 +46,14 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
       );
 
       Navigator.pop(context);
-
     } on FirebaseAuthException catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(e.message ?? "Authentication failed")),
       );
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Something went wrong.")),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("Something went wrong.")));
     }
 
     if (mounted) {
@@ -72,16 +72,13 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text("Change Password"),
-      ),
+      appBar: AppBar(title: const Text("Change Password")),
       body: Padding(
         padding: const EdgeInsets.all(20),
         child: Form(
           key: _formKey,
           child: Column(
             children: [
-
               // Current Password
               TextFormField(
                 controller: currentPasswordController,
@@ -90,10 +87,9 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
                   labelText: "Current Password",
                   border: OutlineInputBorder(),
                 ),
-                validator: (value) =>
-                    value == null || value.isEmpty
-                        ? "Enter current password"
-                        : null,
+                validator: (value) => value == null || value.isEmpty
+                    ? "Enter current password"
+                    : null,
               ),
 
               const SizedBox(height: 20),
@@ -149,10 +145,18 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
                     backgroundColor: Color(0xFF8CCCD3),
                   ),
                   child: isLoading
-                      ? const CircularProgressIndicator(
-                          color: Color(0xFF8CCCD3),
+                      ? const SizedBox(
+                          height: 24,
+                          width: 24,
+                          child: CircularProgressIndicator(
+                            color: Color(0xFF8CCCD3),
+                            strokeWidth: 3,
+                          ),
                         )
-                      : const Text("Change Password", style: TextStyle(color: Colors.black),),
+                      : const Text(
+                          "Change Password",
+                          style: TextStyle(fontSize: 16, color: Colors.black),
+                        ),
                 ),
               ),
             ],
