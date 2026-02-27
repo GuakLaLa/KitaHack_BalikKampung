@@ -7,6 +7,8 @@ import 'package:floodsense/report/report_page.dart';
 import 'package:flutter/material.dart';
 import 'package:floodsense/auth/app_user.dart';
 import 'package:floodsense/services/flood_service.dart';
+import 'package:floodsense/services/location_service.dart';
+import 'package:floodsense/map/marker.dart';
 import 'package:floodsense/auth/login_page.dart';
 
 class NavigationPage extends StatefulWidget{
@@ -17,11 +19,58 @@ class NavigationPage extends StatefulWidget{
 }
 
 class _FirstPageState extends State<NavigationPage> {
-  //this keep track of the selected index
+  // This keeps track of the selected index
   int _selectedIndex = 0;
 
   // Lifted district state — shared between HomePage and MapPage
   String _selectedDistrict = FloodService.supportedDistricts.first;
+
+  // Whether we're still trying to figure out the user's district.
+  bool _isInitializing = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _determineInitialDistrict();
+  }
+
+  /// Attempt to figure out the user's district from GPS and switch
+  /// before the UI paints the first frame. Falls back silently.
+  Future<void> _determineInitialDistrict() async {
+    try {
+      final pos = await LocationService.getCurrentLocation();
+      String? nearest;
+      double minDist = double.infinity;
+
+      supportedDistrictCoordinates.forEach((district, coords) {
+        final distKm = LocationService.calculateDistance(
+          pos.latitude,
+          pos.longitude,
+          coords.latitude,
+          coords.longitude,
+        );
+        if (distKm < minDist) {
+          minDist = distKm;
+          nearest = district;
+        }
+      });
+
+      if (nearest != null && nearest != _selectedDistrict) {
+        setState(() {
+          _selectedDistrict = nearest!;
+        });
+      }
+    } catch (e) {
+      // ignore any location errors
+      debugPrint('Initial district detection failed: $e');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isInitializing = false;
+        });
+      }
+    }
+  }
 
   final User? user = FirebaseAuth.instance.currentUser;
 
@@ -58,6 +107,12 @@ class _FirstPageState extends State<NavigationPage> {
 
   @override
   Widget build(BuildContext context){
+    if (_isInitializing) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: Text(_titles[_selectedIndex]),

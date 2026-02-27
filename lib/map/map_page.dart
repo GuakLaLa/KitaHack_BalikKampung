@@ -7,6 +7,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'flood_report_dialog.dart';
 import 'nearest_shelter.dart';
 import 'marker.dart';
+import 'flood_situation.dart';
 
 final FirebaseFirestore firestore = FirebaseFirestore.instance;
 
@@ -28,6 +29,7 @@ class _MapPageState extends State<MapPage> {
   String? _locationError;
 
   final Set<Marker> _markers = {};
+  Set<Marker> _officialMarkers = {};
 
   @override
   void initState() {
@@ -37,7 +39,25 @@ class _MapPageState extends State<MapPage> {
 
   Future<void> _initialize() async {
     await _getLocation();
+    await _loadOfficialSituations();
     _listenFloodReports();
+  }
+
+  Future<void> _loadOfficialSituations() async {
+    try {
+      final service = FloodSituationService();
+      final situations = await service.fetchAllDistrictSituations();
+      final markers = getSituationMarkers(situations);
+
+      if (!mounted) return;
+      setState(() {
+        _officialMarkers = markers;
+        _markers.addAll(_officialMarkers);
+      });
+    } catch (e) {
+      // ignore errors but log
+      debugPrint('Official situations load error: $e');
+    }
   }
 
   @override
@@ -113,7 +133,8 @@ class _MapPageState extends State<MapPage> {
               setState(() {
                 _markers
                   ..clear()
-                  ..addAll(newMarkers);
+                  ..addAll(newMarkers)
+                  ..addAll(_officialMarkers);
               });
             },
             onClusterDeleted: (deletedCluster) {
