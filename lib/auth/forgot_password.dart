@@ -28,7 +28,7 @@ class ForgotPasswordPage extends StatelessWidget {
                 );
                 Navigator.pop(context);
               },
-              child: const Text("Send Reset Email"),
+              child: const Text("Send Reset Email", style: TextStyle(color: Colors.black),),
             ),
           ],
         ),
