@@ -76,7 +76,8 @@ For example, in Rantau Panjang, even 10mm rainfall can lead to 0.47 km² of floo
   * “Days Until Flood”
   * 3-day Flood Forecast
   * Risk classification (High/Medium/Low)
-* Current validation accuracy: 94.7%.
+* Current validation accuracy: 94.7%.  
+  <img width="444" height="350" alt="Image" src="https://github.com/user-attachments/assets/54f56747-f305-4833-96a5-40f869f07e08" />
 
 **Gemini AI:**
 * Analyzes emergency reports.
