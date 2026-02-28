@@ -260,6 +260,20 @@ flutter pub get
 flutter run
 
 ```
+Here is a short and simple conclusion-style job distribution for your README.
+
+---
+
+## 👥 Team
+
+| Member | Key Contributions |
+| --- | --- |
+| **Tan Zhi Wei (zw)** | **Admin & Response:** Emergency Reporting system, Admin Dashboard, and Profile Management. <br> **Authentication:** Login, Sign Up, & Password Recovery.|
+| **Lim Ye Woon (yw)** | **AI Insights:** Home Page Flood Prediction & Map Page Official Situation Layer. |
+| **Tan Wei Ru (wr)** | **Safety & Analysis:** Rainfall Anomaly service, Safety Checklists, and Nearest Shelter navigation. |
+| **Chow Shino (shino)** | **Community Map:** Real-time visualization of surrounding flood reports. |
+
+
 ---
 
 ## 📄 License
