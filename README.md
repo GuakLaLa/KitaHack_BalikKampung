@@ -68,6 +68,7 @@ For example, in Rantau Panjang, even 10mm rainfall can lead to 0.47 km² of floo
 
 **BigQuery ML:**
 * Linear Regression Model:`flood_model_v1`
+  <img width="684" height="469" alt="Image" src="https://github.com/user-attachments/assets/3804846e-127b-4956-9bd1-e12233a4c8b9" />
 * Predicts flood risk based on:
   * Rainfall
   * Elevation
@@ -152,17 +153,17 @@ We measure impact through:
 ## **🤖 Why AI Matters**
 
 * **Without AI**:
-* No “Days Until Flood” countdown
-* No localized predictive risk levels
-* Forecast charts become static
-* Admin must manually review all reports
-* No intelligent prioritization
+ * No “Days Until Flood” countdown
+ * No localized predictive risk levels
+ * Forecast charts become static
+ * Admin must manually review all reports
+ * No intelligent prioritization
 
 
 * **AI enables**:
-* District-specific flood simulation
-* Vulnerability-aware emergency scoring
-* Faster resource allocation
+ * District-specific flood simulation
+ * Vulnerability-aware emergency scoring
+ * Faster resource allocation
 
 ---
 
