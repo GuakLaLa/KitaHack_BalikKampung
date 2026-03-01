@@ -29,12 +29,15 @@ class HomePage extends StatefulWidget {
   State<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> with AutomaticKeepAliveClientMixin {
+class _HomePageState extends State<HomePage>
+    with AutomaticKeepAliveClientMixin {
   static const _prefsKey = 'flood_alert_last_shown';
 
   FloodPredictionResponse? _floodData;
   bool _isLoading = false;
   String? _errorMessage;
+
+  bool _isDialogShowing = false;
 
   // keep track of the selected district locally so it survives rebuilds
   late String _selectedDistrict;
@@ -43,12 +46,12 @@ class _HomePageState extends State<HomePage> with AutomaticKeepAliveClientMixin 
   double? latitude;
   double? longitude;
   bool isLocationLoading = true;
-  
+
   // Prevent notification spam
   String? _lastAnomalyType;
   String? _lastRiskLevel;
   String? _lastNotifiedDistrict;
-  
+
   // District coordinates (lat, lon)
   static const Map<String, List<double>> DISTRICT_COORDS = {
     'Shah_Alam_Selangor': [3.0697, 101.5037],
@@ -75,7 +78,7 @@ class _HomePageState extends State<HomePage> with AutomaticKeepAliveClientMixin 
     final pos = await _getUserLocation();
     if (pos != null) {
       await _findNearestDistrict(pos);
-    }// Fetch initial data
+    } // Fetch initial data
   }
 
   // Get user's location lat long
@@ -130,7 +133,6 @@ class _HomePageState extends State<HomePage> with AutomaticKeepAliveClientMixin 
     }
   }
 
-
   @override
   void didUpdateWidget(covariant HomePage oldWidget) {
     super.didUpdateWidget(oldWidget);
@@ -163,8 +165,28 @@ class _HomePageState extends State<HomePage> with AutomaticKeepAliveClientMixin 
       });
 
       // Check if we should show the alert dialog
-      _maybeShowFloodAlert(data);
-      _checkNotificationConditions(data);
+      await _maybeShowFloodAlert(data);
+
+      //Trigger high-risk "red box" notification if needed
+      // Only trigger if dialog was NOT shown today
+      final prefs = await SharedPreferences.getInstance();
+      final lastShown = prefs.getString(_prefsKey);
+      final today = DateTime.now().toIso8601String().split('T').first;
+
+      if ((_floodData?.riskLevel.toUpperCase() == 'HIGH' ||
+              _floodData?.floodReminder != null)) {
+        // Prevent duplicate notifications for the same district
+        if (_lastNotifiedDistrict != _selectedDistrict ||
+            _lastRiskLevel != _floodData!.riskLevel) {
+          _lastRiskLevel = _floodData!.riskLevel;
+          _lastNotifiedDistrict = _selectedDistrict;
+          // Show notification for red box
+          await NotificationService.showFloodAlert(
+            'Flood Alert for $_selectedDistrict: ${_floodData!.floodReminder ?? "High Risk"}',
+          );
+        }
+      }
+      await _checkNotificationConditions(data);
     } catch (e) {
       setState(() {
         _errorMessage = 'Error: ${e.toString()}';
@@ -173,7 +195,9 @@ class _HomePageState extends State<HomePage> with AutomaticKeepAliveClientMixin 
     }
   }
 
-  Future<void> _checkNotificationConditions(FloodPredictionResponse data) async {
+  Future<void> _checkNotificationConditions(
+    FloodPredictionResponse data,
+  ) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
@@ -192,8 +216,7 @@ class _HomePageState extends State<HomePage> with AutomaticKeepAliveClientMixin 
     if (floodEnabled &&
         data.riskLevel.toLowerCase() == "high" &&
         (_lastNotifiedDistrict != _selectedDistrict ||
-        _lastRiskLevel != data.riskLevel)) {
-
+            _lastRiskLevel != data.riskLevel)) {
       // Update last notified values
       _lastRiskLevel = data.riskLevel;
       _lastNotifiedDistrict = _selectedDistrict;
@@ -204,16 +227,15 @@ class _HomePageState extends State<HomePage> with AutomaticKeepAliveClientMixin 
     //Rainfall Anomaly Notification
     if (rainfallEnabled) {
       try {
-        final analysis = await RainfallAnomalyService()
-            .fetchAndAnalyze(_selectedDistrict);
+        final analysis = await RainfallAnomalyService().fetchAndAnalyze(
+          _selectedDistrict,
+        );
 
         print("Rainfall ratio: ${analysis.ratio}");
         print("Today rainfall: ${analysis.todayRainfall}");
         print("Anomaly: ${analysis.anomalyType}");
 
-        if (analysis.ratio > 1.2 &&
-            analysis.anomalyType != _lastAnomalyType) {
-
+        if (analysis.ratio > 1.2 && analysis.anomalyType != _lastAnomalyType) {
           _lastAnomalyType = analysis.anomalyType;
 
           await NotificationService.showRainfallAlert(
@@ -234,11 +256,21 @@ class _HomePageState extends State<HomePage> with AutomaticKeepAliveClientMixin 
     if (daysUntilFlood == null) return;
     if (daysUntilFlood > 3) return;
 
+    if (_isDialogShowing) return; //Prevent stacking
+
+     _isDialogShowing = true; 
+
     final prefs = await SharedPreferences.getInstance();
     final lastShown = prefs.getString(_prefsKey);
     final today = DateTime.now().toIso8601String().split('T').first;
 
     if (lastShown == today) return;
+
+    String message =
+        "Flood predicted in $daysUntilFlood days at ${data.location}. Please prepare your emergency kit.";
+
+    // 🔔 Show notification when dialog shows
+    await NotificationService.showFloodAlert(message);
 
     // show dialog
     if (!mounted) return;
@@ -250,6 +282,8 @@ class _HomePageState extends State<HomePage> with AutomaticKeepAliveClientMixin 
 
     // store that we showed today
     await prefs.setString(_prefsKey, today);
+
+    _isDialogShowing = false; // reset flag after dialog is dismissed
   }
 
   @override
@@ -288,14 +322,16 @@ class _HomePageState extends State<HomePage> with AutomaticKeepAliveClientMixin 
                 onChanged: (String? newValue) {
                   if (newValue != null && newValue != _selectedDistrict) {
                     setState(() {
-                      _selectedDistrict = newValue;   //UPDATE LOCAL STATE
-                      _floodData = null;             //optional: force refresh UI
+                      _selectedDistrict = newValue; //UPDATE LOCAL STATE
+                      _floodData = null; //optional: force refresh UI
+                      _lastNotifiedDistrict = null;
+                      _lastRiskLevel = null;
                     });
 
-                    widget.onDistrictChanged(newValue);  //notify parent
-                    _fetchFloodData(newValue);           //fetch new data
+                    widget.onDistrictChanged(newValue); //notify parent
+                    _fetchFloodData(newValue); //fetch new data
                   }
-                }
+                },
               ),
             ),
 
@@ -365,14 +401,10 @@ class _HomePageState extends State<HomePage> with AutomaticKeepAliveClientMixin 
               FloodForecastList(forecasts: _floodData!.forecast),
 
             // Rainfall Anomaly Detection — uses district for consistent location
-            RainfallAnomalyCard(
-              selectedDistrict: _selectedDistrict,
-            ),
+            RainfallAnomalyCard(selectedDistrict: _selectedDistrict),
 
             // 7-Day Weather Forecast — uses district for consistent location
-            WeatherForecastCard(
-              selectedDistrict: _selectedDistrict,
-            ),
+            WeatherForecastCard(selectedDistrict: _selectedDistrict),
 
             // Reminder Checklist
             const ReminderChecklistCard(),

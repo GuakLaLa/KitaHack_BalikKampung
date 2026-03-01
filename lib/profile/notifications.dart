@@ -55,6 +55,7 @@ class NotificationService {
     String body, {
     required String channelId,
     required String channelName,
+    int? id,
   }) async {
     final androidDetails = AndroidNotificationDetails(
       channelId,
@@ -69,7 +70,7 @@ class NotificationService {
     );
 
     await _localNotifications.show(
-      id: 0,
+      id: id ?? DateTime.now().millisecondsSinceEpoch ~/ 1000, // unique ID
       title: title,
       body: body,
       notificationDetails: notificationDetails,

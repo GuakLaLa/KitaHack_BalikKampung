@@ -13,7 +13,7 @@ class AIPriorityService {
     required String description,
   }) async {
     try {
-      final apiKey = dotenv.env['GEMINI_API_KEY'];
+      final apiKey = dotenv.env['googleApiKey'];
       print("API KEY BEING USED: $apiKey");
 
       if (apiKey == null || apiKey.isEmpty) {
