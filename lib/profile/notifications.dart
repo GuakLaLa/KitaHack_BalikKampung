@@ -22,11 +22,14 @@ class NotificationService {
     await _localNotifications.initialize(settings: settings);
 
     // Get & save FCM token
+  try {
     String? token = await _messaging.getToken();
-
     if (token != null) {
       await _saveTokenToFirestore(token);
     }
+  } catch (e) {
+    print('Failed to get/save FCM token (will not block app startup): $e');
+  }
 
     // Handle foreground push notifications
     FirebaseMessaging.onMessage.listen((RemoteMessage message) {
