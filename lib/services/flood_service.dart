@@ -82,9 +82,11 @@ class FloodService {
         final json = jsonDecode(response.body) as Map<String, dynamic>;
         return FloodPredictionResponse.fromJson(json);
       } else {
-        throw Exception(
-          'Failed to fetch prediction. Status code: ${response.statusCode}',
-        );
+          print('Prediction failed. Status: ${response.statusCode}');
+          print('Response body: ${response.body}');
+          throw Exception(
+            'Failed to fetch prediction. Status code: ${response.statusCode}',
+          );
       }
     } catch (e) {
       rethrow;
